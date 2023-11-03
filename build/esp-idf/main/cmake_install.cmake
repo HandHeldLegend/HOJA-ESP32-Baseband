@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/Mitch/GitRepos/SuperGamepadPlus/FW/ESP32/main
+# Install script for directory: C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/main
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)

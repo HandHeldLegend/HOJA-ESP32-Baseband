@@ -1,4 +1,4 @@
-# Install script for directory: C:/Users/Mitch/GitRepos/SuperGamepadPlus/FW/ESP32
+# Install script for directory: C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband
 
 # Set the install prefix
 if(NOT DEFINED CMAKE_INSTALL_PREFIX)
@@ -39,7 +39,7 @@ endif()
 
 if(NOT CMAKE_INSTALL_LOCAL_ONLY)
   # Include the install script for the subdirectory.
-  include("C:/Users/Mitch/GitRepos/SuperGamepadPlus/FW/ESP32/build/esp-idf/cmake_install.cmake")
+  include("C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/esp-idf/cmake_install.cmake")
 endif()
 
 if(CMAKE_INSTALL_COMPONENT)
@@ -50,5 +50,5 @@ endif()
 
 string(REPLACE ";" "\n" CMAKE_INSTALL_MANIFEST_CONTENT
        "${CMAKE_INSTALL_MANIFEST_FILES}")
-file(WRITE "C:/Users/Mitch/GitRepos/SuperGamepadPlus/FW/ESP32/build/${CMAKE_INSTALL_MANIFEST}"
+file(WRITE "C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/${CMAKE_INSTALL_MANIFEST}"
      "${CMAKE_INSTALL_MANIFEST_CONTENT}")

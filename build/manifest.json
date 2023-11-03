@@ -1,0 +1,15 @@
+{
+    "name": "HOJA Baseband",
+    "version": "11.3.2023",
+    "new_install_prompt_erase": true,
+    "builds": [
+      {
+        "chipFamily": "ESP32",
+        "parts": [
+          { "path": "https://github.com/HandHeldLegend/HOJA-ESP32-Baseband/raw/master/build/bootloader/bootloader.bin", "offset": 4096 },
+          { "path": "https://github.com/HandHeldLegend/HOJA-ESP32-Baseband/raw/master/build/partition_table/partition-table.bin", "offset": 32768 },
+          { "path": "https://github.com/HandHeldLegend/HOJA-ESP32-Baseband/raw/master/build/ESP32.bin", "offset": 65536 }
+        ]
+      }
+    ]
+  }

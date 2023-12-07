@@ -97,7 +97,7 @@ void _i2c_write_status_msg()
     {
         ESP_LOGI("_i2c_write_status_msg", "Sending override message.");
         //i2c_reset_tx_fifo(I2C_SLAVE_NUM);
-        i2c_slave_write_buffer(I2C_SLAVE_NUM, _msg_override_data, HOJA_I2C_MSG_SIZE_OUT, portMAX_DELAY);
+        if(i2c_slave_write_buffer(I2C_SLAVE_NUM, _msg_override_data, HOJA_I2C_MSG_SIZE_OUT, portMAX_DELAY))
         _msg_override = false;
     }
     else 
@@ -179,6 +179,12 @@ void app_set_rumble(uint8_t intensity)
 {
     if(intensity>_bluetooth_status.rumble_intensity);
     _bluetooth_status.rumble_intensity = (intensity>100) ? 100 : intensity;
+}
+
+void app_send_shutdown()
+{
+    _msg_override_data[0] = I2CINPUT_ID_SHUTDOWN;
+    _msg_override = true;
 }
 
 void app_save_host_mac()

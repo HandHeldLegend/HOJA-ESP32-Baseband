@@ -200,6 +200,11 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     ns_report_setack(0x80);
     break;
 
+  case SW_CMD_SET_HCI:
+    // For now all options should shut down
+    app_send_shutdown();
+    break;
+
   case SW_CMD_GET_SPI:
     printf("Read SPI. Address: %X, %X | Len: %d\n", data[11], data[10], data[14]);
     ns_report_setack(0x90);

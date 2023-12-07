@@ -287,12 +287,9 @@ void _xinput_bt_input_task(void * params)
 
     for(;;)
     {
-        if(xinput_compare(&xi_input, &xi_input_last))
-        {
-            memcpy(xi_buffer, &xi_input, XI_HID_LEN);
-            esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
-            memcpy(&xi_input_last, &xi_input, sizeof(xi_input_s));
-        }
+
+        memcpy(xi_buffer, &xi_input, XI_HID_LEN);
+        esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
         
         vTaskDelay(8/portTICK_PERIOD_MS);
     }

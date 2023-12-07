@@ -3,6 +3,72 @@
 
 #include "hoja_includes.h"
 
+// IMU data structure
+typedef struct
+{
+    union
+    {
+        struct
+        {
+            uint8_t ax_8l : 8;
+            uint8_t ax_8h : 8;
+        };
+        int16_t ax;
+    };
+
+    union
+    {
+        struct
+        {
+            uint8_t ay_8l : 8;
+            uint8_t ay_8h : 8;
+        };
+        int16_t ay;
+    };
+    
+    union
+    {
+        struct
+        {
+            uint8_t az_8l : 8;
+            uint8_t az_8h : 8;
+        };
+        int16_t az;
+    };
+    
+    union
+    {
+        struct
+        {
+            uint8_t gx_8l : 8;
+            uint8_t gx_8h : 8;
+        };
+        int16_t gx;
+    };
+
+    union
+    {
+        struct
+        {
+            uint8_t gy_8l : 8;
+            uint8_t gy_8h : 8;
+        };
+        int16_t gy;
+    };
+    
+    union
+    {
+        struct
+        {
+            uint8_t gz_8l : 8;
+            uint8_t gz_8h : 8;
+        };
+        int16_t gz;
+    };
+    
+    bool retrieved;
+} imu_data_s;
+
 typedef struct
 {
     // Mac address of this device
@@ -99,15 +165,10 @@ typedef union
     uint16_t rs_x;
     uint16_t rs_y;
 
-    uint16_t ax;
-    uint16_t ay;
-    uint16_t az;
-    uint16_t gx;
-    uint16_t gy;
-    uint16_t gz;
-
 } __attribute__ ((packed)) sw_input_s;
 
+imu_data_s* imu_fifo_last();
+void imu_fifo_push(imu_data_s *imu_data);
 void app_set_rumble(uint8_t intensity);
 bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2);
 

@@ -439,7 +439,7 @@ void _switch_bt_task_standard(void * parameters)
 
         ns_report_settimer(_full_buffer);
         ns_report_setbattconn(_full_buffer);
-        _full_buffer[12] = 0x70;
+        //_full_buffer[12] = 0x70;
 
         esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, 47, _full_buffer);
 
@@ -511,11 +511,4 @@ void switch_bt_sendinput(i2cinput_input_s *input)
 
     _switch_input_data.sb_left  = input->button_stick_left;
     _switch_input_data.sb_right = input->button_stick_right;
-
-    _switch_input_data.ax   = input->ax;
-    _switch_input_data.ay   = input->ay;
-    _switch_input_data.az   = input->az;
-    _switch_input_data.gx   = input->gx;
-    _switch_input_data.gy   = input->gy;
-    _switch_input_data.gz   = input->gz;
 }

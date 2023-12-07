@@ -31,6 +31,29 @@ hoja_settings_s global_loaded_settings = {0};
 bool     _msg_override = false;
 uint8_t  _msg_override_data[HOJA_I2C_MSG_SIZE_OUT]  = {0};
 
+void _unpack_i2c_msg(uint8_t *input, i2cinput_input_s *output)
+{
+    // Unpack buttons_all
+    output->buttons_all = input[0] | (input[1] << 8);
+    output->buttons_system = input[2];
+
+    // Unpack LX, LY, RX, RY, LT, RT
+    output->lx = input[3] | (input[4] << 8);
+    output->ly = input[5] | (input[6] << 8);
+    output->rx = input[7] | (input[8] << 8);
+    output->ry = input[9] | (input[10] << 8);
+    output->lt = input[11] | (input[12] << 8);
+    output->rt = input[13] | (input[14] << 8);
+
+    // Unpack AX, AY, AZ, GX, GY, GZ
+    output->ax = input[15] | (input[16] << 8);
+    output->ay = input[17] | (input[18] << 8);
+    output->az = input[19] | (input[20] << 8);
+    output->gx = input[21] | (input[22] << 8);
+    output->gy = input[23] | (input[24] << 8);
+    output->gz = input[25] | (input[26] << 8);
+}
+
 bool _i2c_read_msg(uint8_t *buffer)
 {
     uint8_t idx = 0;
@@ -38,56 +61,34 @@ bool _i2c_read_msg(uint8_t *buffer)
     static bool e = false;
     static bool f = false;
 
+    uint8_t pattern = 0x00;
+    bool got = false;
+
     while(idx<HOJA_I2C_MSG_SIZE_IN)
     {
-        i2c_slave_read_buffer(I2C_SLAVE_NUM, &buffer[idx], 1, portMAX_DELAY);
-        switch(buffer[idx])
+        if(i2c_slave_read_buffer(I2C_SLAVE_NUM, &buffer[idx], 1, portMAX_DELAY)>0)
         {
-            default:
-            break;
-
-            case 0xDD:
-            d=true;
-            break;
-
-            case 0xEE:
-            e=true;
-            break;
-
-            case 0xFF:
-            if(idx==(HOJA_I2C_MSG_SIZE_IN-1))
+            if(buffer[idx] == 0xDD)
             {
-                f=true;
-                idx=HOJA_I2C_MSG_SIZE_IN;
+                pattern += 1;
             }
-            else
+            else if( (buffer[idx] == 0xEE) && (pattern == 1) )
             {
-                f=false;
-                idx=HOJA_I2C_MSG_SIZE_IN;
+                pattern += 1;
             }
-            break;
+            else if( (buffer[idx] == 0xAA) && (pattern == 2) ) // If we get here we reset our index to re-align
+            {
+                idx = 2;
+                pattern = 0;
+                got = true;
+            }
         }
         idx++;
     }
 
     i2c_reset_rx_fifo(I2C_SLAVE_NUM);
 
-    if(d&&e&&f)
-    {
-        d=false;
-        e=false;
-        f=false;
-        idx=0;
-        return true;
-    }
-    else
-    {
-        d=false;
-        e=false;
-        f=false;
-        idx=0;
-        return false;
-    }
+    return got;
 }
 
 void _i2c_write_status_msg()
@@ -132,6 +133,32 @@ static esp_err_t i2c_slave_init(void)
     return i2c_driver_install(i2c_slave_port, conf_slave.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
 }
 
+#define IMU_FIFO_COUNT 3
+#define IMU_FIFO_IDX_MAX (IMU_FIFO_COUNT-1)
+int _imu_fifo_idx = 0;
+imu_data_s _imu_fifo[IMU_FIFO_COUNT];
+
+// Add data to our FIFO
+void imu_fifo_push(imu_data_s *imu_data)
+{
+    int _i = (_imu_fifo_idx+1) % IMU_FIFO_COUNT;
+
+    _imu_fifo[_i].ax = imu_data->ax;
+    _imu_fifo[_i].ay = imu_data->ay;
+    _imu_fifo[_i].az = imu_data->az;
+
+    _imu_fifo[_i].gx = imu_data->gx;
+    _imu_fifo[_i].gy = imu_data->gy;
+    _imu_fifo[_i].gz = imu_data->gz;
+
+    _imu_fifo_idx = _i;
+}
+
+imu_data_s* imu_fifo_last()
+{
+  return &(_imu_fifo[_imu_fifo_idx]);
+}
+
 bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
 {
     ESP_LOGI("app_compare_mac", "Mac 1:");
@@ -170,18 +197,34 @@ void app_save_host_mac()
     memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
 }
 
+imu_data_s _new_imu = {0};
+
 void app_input(i2cinput_input_s *input)
 {
+    _new_imu.ax = input->ax;
+    _new_imu.ay = input->ay;
+    _new_imu.az = input->az;
+
+    _new_imu.gx = input->gx;
+    _new_imu.gy = input->gy;
+    _new_imu.gz = input->gz;
+
+    imu_fifo_push(&_new_imu);
+
     if (!_bluetooth_input_cb)
         return;
 
     _bluetooth_input_cb(input);
 }
 
+i2cinput_input_s input = {0};
+
 void app_main(void)
 {
     const char *TAG = "app_main";
     esp_err_t ret;
+
+    ESP_LOGI(TAG, "Bluetooth FW starting...");
 
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -194,7 +237,7 @@ void app_main(void)
     ESP_ERROR_CHECK(i2c_slave_init());
 
     static uint8_t data[HOJA_I2C_MSG_SIZE_IN]      = {0xFF, 0xFF, 0xFF};
-    static i2cinput_input_s input = {0};
+    
 
     for (;;)
     {
@@ -207,7 +250,7 @@ void app_main(void)
             // First, write our response data
             _i2c_write_status_msg();
 
-            switch (data[0])
+            switch (data[3])
             {
                 default:
                     ESP_LOGI(TAG, "WRONG CODE");
@@ -218,23 +261,24 @@ void app_main(void)
                 case I2CINPUT_ID_INIT:
                 {
 
-                    input_mode_t mode = data[1];
-                    global_loaded_settings.device_mac[0] = data[2];
-                    global_loaded_settings.device_mac[1] = data[3];
-                    global_loaded_settings.device_mac[2] = data[4];
+                    input_mode_t mode = data[4];
 
-                    global_loaded_settings.device_mac[3] = data[5];
-                    global_loaded_settings.device_mac[4] = data[6];
-                    global_loaded_settings.device_mac[5] = data[7];
+                    global_loaded_settings.device_mac[0] = data[5];
+                    global_loaded_settings.device_mac[1] = data[6];
+                    global_loaded_settings.device_mac[2] = data[7];
+
+                    global_loaded_settings.device_mac[3] = data[8];
+                    global_loaded_settings.device_mac[4] = data[9];
+                    global_loaded_settings.device_mac[5] = data[10];
 
                     // Load paired mac
-                    global_loaded_settings.paired_host_mac[0] = data[8];
-                    global_loaded_settings.paired_host_mac[1] = data[9];
-                    global_loaded_settings.paired_host_mac[2] = data[10];
+                    global_loaded_settings.paired_host_mac[0] = data[11];
+                    global_loaded_settings.paired_host_mac[1] = data[12];
+                    global_loaded_settings.paired_host_mac[2] = data[13];
 
-                    global_loaded_settings.paired_host_mac[3] = data[11];
-                    global_loaded_settings.paired_host_mac[4] = data[12];
-                    global_loaded_settings.paired_host_mac[5] = data[13];
+                    global_loaded_settings.paired_host_mac[3] = data[14];
+                    global_loaded_settings.paired_host_mac[4] = data[15];
+                    global_loaded_settings.paired_host_mac[5] = data[16];
 
                     esp_log_buffer_hex(TAG, global_loaded_settings.paired_host_mac, 6);
 
@@ -262,7 +306,7 @@ void app_main(void)
 
                 case I2CINPUT_ID_INPUT:
                 {
-                    memcpy(&input, &data[1], 27);
+                    _unpack_i2c_msg(&(data[4]), &input);
                     app_input(&input);
                     memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
                 }

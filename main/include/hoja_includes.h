@@ -84,12 +84,12 @@ typedef struct
     uint16_t lt;
     uint16_t rt;
 
-    uint16_t ax;
-    uint16_t ay;
-    uint16_t az;
-    uint16_t gx;
-    uint16_t gy;
-    uint16_t gz;
+    int16_t ax;
+    int16_t ay;
+    int16_t az;
+    int16_t gx;
+    int16_t gy;
+    int16_t gz;
     
 } i2cinput_input_s;
 

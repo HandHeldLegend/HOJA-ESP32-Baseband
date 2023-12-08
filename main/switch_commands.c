@@ -1,4 +1,5 @@
 #include "switch_commands.h"
+#include <math.h>
 
 uint8_t _switch_input_buffer[64] = {0};
 uint8_t _switch_input_report_id = 0x00;
@@ -124,15 +125,14 @@ void switch_rumble_translate(const uint8_t *data)
   if (shouldControllerRumble(data))
   {
     uint8_t upper = (data[1] & 0xFE) / 2;
-    uint8_t lower = (data[3] & 0x7F) - 0x40;
-    float il = (float)lower / 64.0f;
-    float iu = (float)upper / 128.0f;
-    float i = (((il > iu) ? il : iu) * 0.1f) + 0.9f;
-    i = (i >= 1.0f) ? 1.0f : i;
-    // TO DO
+    uint8_t lower = (((data[3] & 0x7F) - 0x40) * 2) + (data[2] == 0x80);
+    float il = powf((float)lower / 100.0f, 2.0f);
+    float iu = powf((float)upper / 100.0f, 0.5f);
 
-    float i8 = 100 * i;
-    app_set_rumble((uint8_t)i8);
+    float i = (il > iu) ? il : iu;
+    i = (i >= 1.0f) ? 1.0f : i;
+    i*=100;
+    app_set_rumble((uint8_t)i);
   }
   else
   {

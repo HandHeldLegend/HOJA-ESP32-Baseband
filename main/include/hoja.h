@@ -169,7 +169,8 @@ typedef union
 
 imu_data_s* imu_fifo_last();
 void imu_fifo_push(imu_data_s *imu_data);
-void app_send_shutdown();
+void app_set_connected(uint8_t connected);
+void app_send_command(uint8_t cmd, uint8_t msg);
 void app_set_rumble(uint8_t intensity);
 bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2);
 

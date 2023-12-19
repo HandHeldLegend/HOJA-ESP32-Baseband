@@ -277,6 +277,7 @@ void switch_bt_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *param)
                     ESP_LOGI(TAG, "disconnecting...");
                 } else if (param->close.conn_status == ESP_HIDD_CONN_STATE_DISCONNECTED) {
                     ESP_LOGI(TAG, "disconnected!");
+                    app_set_connected(0);
                     esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
                 } else {
                     ESP_LOGI(TAG, "unknown connection status");
@@ -310,6 +311,7 @@ void switch_bt_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *param)
             ESP_LOGI(TAG, "ESP_HIDD_VC_UNPLUG_EVT");
             if (param->vc_unplug.status == ESP_HIDD_SUCCESS) {
                 if (param->close.conn_status == ESP_HIDD_CONN_STATE_DISCONNECTED) {
+                    app_set_connected(0);
                     ESP_LOGI(TAG, "disconnected!");
                 } else {
                     ESP_LOGI(TAG, "unknown connection status");

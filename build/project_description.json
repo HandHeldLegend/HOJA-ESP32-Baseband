@@ -1,7 +1,7 @@
 {
     "version":            "1",
     "project_name":       "ESP32",
-    "project_version":    "7874526-dirty",
+    "project_version":    "b3a72c8-dirty",
     "project_path":       "C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband",
     "idf_path":           "C:/Users/Mitch/esp/esp-idf",
     "build_dir":          "C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build",

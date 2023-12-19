@@ -26,6 +26,7 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     case ESP_HIDD_CONNECT_EVENT:
     {
         ESP_LOGI(TAG, "CONNECT");
+        _xinput_ready = true;
         break;
     }
     case ESP_HIDD_PROTOCOL_MODE_EVENT:
@@ -40,7 +41,27 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     }
     case ESP_HIDD_OUTPUT_EVENT:
     {
-        // ESP_LOGI(TAG, "OUTPUT[%u]: %8s ID: %2u, Len: %d, Data:", param->output.map_index, esp_hid_usage_str(param->output.usage), param->output.report_id, param->output.length);
+        //ESP_LOGI(TAG, "OUTPUT[%u]: %8s ID: %2u, Len: %d, Data:", param->output.map_index, esp_hid_usage_str(param->output.usage), param->output.report_id, param->output.length);
+        if(param->output.report_id == 0x03)
+        {
+            //ESP_LOGI(TAG, "RUMBLE");
+            /*for(uint8_t i = 0; i < param->output.length; i++)
+            {
+                ESP_LOGI(TAG, "%02X ", param->output.data[i]);
+            }*/
+            uint8_t _rumble_intensity = (param->output.data[3] >= param->output.data[4]) ? param->output.data[3] : param->output.data[4];
+            if(!_rumble_intensity)
+            {
+                app_set_rumble(0);
+            }
+            else
+            {
+                float _rumble_intensity_f = ((float)_rumble_intensity / 255.0f) * 100.0f;
+                //ESP_LOGI("RUMBLE", "INTENSITY: %i", (uint8_t) _rumble_intensity_f);
+                app_set_rumble((uint8_t) _rumble_intensity_f);
+            }
+            
+        }
         break;
     }
     case ESP_HIDD_FEATURE_EVENT:
@@ -53,6 +74,7 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
         ESP_LOGI(TAG, "DISCONNECT: %s", esp_hid_disconnect_reason_str(esp_hidd_dev_transport_get(param->disconnect.dev), param->disconnect.reason));
         _xinput_ready=false;
         esp_hid_ble_gap_adv_start();
+        app_set_connected(0);
         break;
     }
     case ESP_HIDD_STOP_EVENT:
@@ -130,6 +152,7 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         {
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
             _xinput_ready = true;
+            app_set_connected(1);
             // ble_hid_task_start_up();//todo: this should be on auth_complete (in GAP)
         }
         break;
@@ -300,9 +323,9 @@ void xinput_bt_sendinput(i2cinput_input_s *input)
     const char *TAG = "xinput_bt_sendinput";
 
     xi_input.stick_left_x   = input->lx << 4;
-    xi_input.stick_left_y   = input->ly << 4;
+    xi_input.stick_left_y   = 0xFFFF - (input->ly << 4);
     xi_input.stick_right_x  = input->rx << 4;
-    xi_input.stick_right_y  = input->ry << 4;
+    xi_input.stick_right_y  = 0xFFFF - (input->ry << 4);
 
     xi_input.analog_trigger_l = input->lt << 4;
     xi_input.analog_trigger_r = input->rt << 4;

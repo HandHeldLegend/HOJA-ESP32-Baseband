@@ -202,7 +202,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
 
   case SW_CMD_SET_HCI:
     // For now all options should shut down
-    app_send_shutdown();
+    app_send_command(I2CINPUT_ID_SHUTDOWN, 0x00);
     break;
 
   case SW_CMD_GET_SPI:
@@ -251,6 +251,8 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     {
       app_save_host_mac();
     }
+
+    app_set_connected(1);
 
     uint8_t player = data[11] & 0xF;
 

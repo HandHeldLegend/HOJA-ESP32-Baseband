@@ -4,14 +4,14 @@ C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/save-def
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/gen_project_binary.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/app.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/erase_flash.dir
+C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/uf2.dir
+C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/uf2-app.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/monitor.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/_project_elf_src.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/bootloader.elf.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/size.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/size-files.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/size-components.dir
-C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/uf2-app.dir
-C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/uf2.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/edit_cache.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/CMakeFiles/rebuild_cache.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/CMakeFiles/edit_cache.dir
@@ -33,7 +33,9 @@ C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/hal/CMakeFi
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/spi_flash/CMakeFiles/__idf_spi_flash.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/spi_flash/CMakeFiles/edit_cache.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/spi_flash/CMakeFiles/rebuild_cache.dir
-C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/esp_app_format/CMakeFiles/__idf_esp_app_format.dir
+C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/esp_bootloader_format/CMakeFiles/__idf_esp_bootloader_format.dir
+C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/esp_bootloader_format/CMakeFiles/edit_cache.dir
+C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/esp_bootloader_format/CMakeFiles/rebuild_cache.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/esp_app_format/CMakeFiles/edit_cache.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/esp_app_format/CMakeFiles/rebuild_cache.dir
 C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/bootloader/esp-idf/bootloader_support/CMakeFiles/__idf_bootloader_support.dir

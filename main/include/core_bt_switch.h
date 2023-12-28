@@ -1,6 +1,8 @@
 #ifndef CORE_BT_SWITCH_H
 #define CORE_BT_SWITCH_H
 
+#define SWITCH_BT_REPORT_SIZE 48
+
 // Include any necessary includes from HOJA backend
 #include "hoja_includes.h"
 

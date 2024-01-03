@@ -155,6 +155,7 @@
     "BT_GATT_MAX_SR_PROFILES": 8,
     "BT_HFP_ENABLE": false,
     "BT_HID_DEVICE_ENABLED": true,
+    "BT_HID_DEVICE_TASK_SIZE": 4096,
     "BT_HID_ENABLED": true,
     "BT_HID_HOST_ENABLED": false,
     "BT_L2CAP_ENABLED": false,

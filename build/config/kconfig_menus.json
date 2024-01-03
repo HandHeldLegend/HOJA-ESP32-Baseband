@@ -5903,7 +5903,18 @@
                                         "type": "bool"
                                     },
                                     {
-                                        "children": [],
+                                        "children": [
+                                            {
+                                                "children": [],
+                                                "depends_on": "BT_HID_DEVICE_ENABLED && BT_BLUEDROID_ENABLED",
+                                                "help": "This selects the esp_hid task size",
+                                                "id": "BT_HID_DEVICE_TASK_SIZE",
+                                                "name": "BT_HID_DEVICE_TASK_SIZE",
+                                                "range": null,
+                                                "title": "Bluetooth HID event (callback to application) task stack size",
+                                                "type": "int"
+                                            }
+                                        ],
                                         "depends_on": "BT_HID_ENABLED && BT_BLUEDROID_ENABLED",
                                         "help": "This enables the BT HID Device",
                                         "id": "BT_HID_DEVICE_ENABLED",

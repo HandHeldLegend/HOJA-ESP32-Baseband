@@ -1,6 +1,6 @@
 {
     "name": "HOJA Baseband",
-    "version": "1.3.2024",
+    "version": "1.3.2024r1",
     "new_install_prompt_erase": true,
     "builds": [
       {

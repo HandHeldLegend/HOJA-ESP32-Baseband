@@ -325,7 +325,7 @@ int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_con
     util_bt_hid_mode = UTIL_BT_MODE_CLASSIC;
 
     esp_bt_cod_t hid_cod;
-    hid_cod.minor = 0x2;
+    hid_cod.minor = 0x4;
     hid_cod.major = 0x5;
     hid_cod.service = 0x400;
     esp_bt_gap_set_cod(hid_cod, ESP_BT_SET_COD_MAJOR_MINOR);
@@ -340,20 +340,27 @@ int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_con
         return -1;
     }
 
-    ESP_LOGI(TAG, "Register HID device callback");
-    if ((ret = esp_bt_hid_device_register_callback(util_bt_app_params->hidd_cb)) != ESP_OK)
+    ESP_LOGI(TAG, "Register HID device.");
+
+    //if ((ret = esp_bt_hid_device_register_callback(util_bt_app_params->hidd_cb)) != ESP_OK)
+    if((ret = esp_hidd_dev_init(hidd_device_config, ESP_HID_TRANSPORT_BT, util_bt_app_params->hidd_cb, &util_bt_app_params->hid_dev)) != ESP_OK)
     {
-        ESP_LOGE(TAG, "HID Callback register failed: %s\n", esp_err_to_name(ret));
+        ESP_LOGE(TAG, "HID device failed to start: %s\n", esp_err_to_name(ret));
         return -1;
     }
 
+    esp_bt_dev_set_device_name(hidd_device_config->device_name);
+
+    /*
 	ESP_LOGI(TAG, "Starting HID Device");
 	if ((ret = esp_bt_hid_device_init()) != ESP_OK)
     {
         ESP_LOGE(TAG, "HID device failed to start:");
         return -1;
-    }
+    }*/
 
+
+    /*
     const char* desc = "Gamepad";
 
     esp_hidd_app_param_t app_param = {
@@ -374,9 +381,9 @@ int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_con
     {
         ESP_LOGE(TAG, "HID device register app failed:");
         return -1;
-    }
+    }*/
 
-    esp_bt_dev_set_device_name(hidd_device_config->device_name);
+    
 
     if (advertise)
     {

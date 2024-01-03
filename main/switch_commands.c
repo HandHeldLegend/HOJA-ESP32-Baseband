@@ -247,10 +247,10 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     ns_report_setack(0x80);
 
     // We set pairing address here
-    if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
-    {
-      app_save_host_mac();
-    }
+    //if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
+    //{
+    //  app_save_host_mac();
+    //}
 
     app_set_connected(1);
 
@@ -289,7 +289,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
   }
 
   // tud_hid_report(0x21, _switch_input_buffer, 64);
-  esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x21, _report_len, _switch_input_buffer);
+  esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x21, SWITCH_BT_REPORT_SIZE, _switch_input_buffer);
 }
 
 // Handles an OUT report and responds accordingly.

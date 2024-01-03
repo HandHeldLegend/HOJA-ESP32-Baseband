@@ -15,18 +15,18 @@
 ########################
 
 //Path to a program.
-CMAKE_ADDR2LINE:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-addr2line.exe
+CMAKE_ADDR2LINE:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-addr2line.exe
 
 //Path to a program.
-CMAKE_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ar.exe
+CMAKE_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-ar.exe
 
 //A wrapper around 'ar' adding the appropriate '--plugin' option
 // for the GCC compiler
-CMAKE_ASM_COMPILER_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc-ar.exe
+CMAKE_ASM_COMPILER_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc-ar.exe
 
 //A wrapper around 'ranlib' adding the appropriate '--plugin' option
 // for the GCC compiler
-CMAKE_ASM_COMPILER_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc-ranlib.exe
+CMAKE_ASM_COMPILER_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc-ranlib.exe
 
 //ASM Compiler Base Flags
 CMAKE_ASM_FLAGS:STRING='-mlongcalls '
@@ -49,11 +49,11 @@ CMAKE_BUILD_TYPE:STRING=
 
 //A wrapper around 'ar' adding the appropriate '--plugin' option
 // for the GCC compiler
-CMAKE_CXX_COMPILER_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc-ar.exe
+CMAKE_CXX_COMPILER_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc-ar.exe
 
 //A wrapper around 'ranlib' adding the appropriate '--plugin' option
 // for the GCC compiler
-CMAKE_CXX_COMPILER_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc-ranlib.exe
+CMAKE_CXX_COMPILER_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc-ranlib.exe
 
 //C++ Compiler Base Flags
 CMAKE_CXX_FLAGS:STRING='-mlongcalls -Wno-frame-address '
@@ -72,11 +72,11 @@ CMAKE_CXX_FLAGS_RELWITHDEBINFO:STRING=-O2 -g -DNDEBUG
 
 //A wrapper around 'ar' adding the appropriate '--plugin' option
 // for the GCC compiler
-CMAKE_C_COMPILER_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc-ar.exe
+CMAKE_C_COMPILER_AR:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc-ar.exe
 
 //A wrapper around 'ranlib' adding the appropriate '--plugin' option
 // for the GCC compiler
-CMAKE_C_COMPILER_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-gcc-ranlib.exe
+CMAKE_C_COMPILER_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-gcc-ranlib.exe
 
 //C Compiler Base Flags
 CMAKE_C_FLAGS:STRING='-mlongcalls -Wno-frame-address '
@@ -121,10 +121,10 @@ CMAKE_FIND_PACKAGE_REDIRECTS_DIR:STATIC=C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseb
 CMAKE_INSTALL_PREFIX:PATH=C:/Program Files (x86)/bootloader
 
 //Path to a program.
-CMAKE_LINKER:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ld.exe
+CMAKE_LINKER:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-ld.exe
 
 //Program used to build from build.ninja files.
-CMAKE_MAKE_PROGRAM:FILEPATH=C:/Users/Mitch/.espressif/tools/ninja/1.10.2/ninja.exe
+CMAKE_MAKE_PROGRAM:FILEPATH=C:/Users/Mitch/.espressif/tools/ninja/1.11.1/ninja.exe
 
 //Flags used by the linker during the creation of modules during
 // all build types.
@@ -147,13 +147,13 @@ CMAKE_MODULE_LINKER_FLAGS_RELEASE:STRING=
 CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO:STRING=
 
 //Path to a program.
-CMAKE_NM:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-nm.exe
+CMAKE_NM:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-nm.exe
 
 //Path to a program.
-CMAKE_OBJCOPY:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-objcopy.exe
+CMAKE_OBJCOPY:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-objcopy.exe
 
 //Path to a program.
-CMAKE_OBJDUMP:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-objdump.exe
+CMAKE_OBJDUMP:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-objdump.exe
 
 //Value Computed by CMake
 CMAKE_PROJECT_DESCRIPTION:STATIC=
@@ -165,10 +165,10 @@ CMAKE_PROJECT_HOMEPAGE_URL:STATIC=
 CMAKE_PROJECT_NAME:STATIC=bootloader
 
 //Path to a program.
-CMAKE_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-ranlib.exe
+CMAKE_RANLIB:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-ranlib.exe
 
 //Path to a program.
-CMAKE_READELF:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-readelf.exe
+CMAKE_READELF:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-readelf.exe
 
 //Flags used by the linker during the creation of shared libraries
 // during all build types.
@@ -218,7 +218,7 @@ CMAKE_STATIC_LINKER_FLAGS_RELEASE:STRING=
 CMAKE_STATIC_LINKER_FLAGS_RELWITHDEBINFO:STRING=
 
 //Path to a program.
-CMAKE_STRIP:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp32-elf/esp-12.2.0_20230208/xtensa-esp32-elf/bin/xtensa-esp32-elf-strip.exe
+CMAKE_STRIP:FILEPATH=C:/Users/Mitch/.espressif/tools/xtensa-esp-elf/esp-13.2.0_20230928/xtensa-esp-elf/bin/xtensa-esp32-elf-strip.exe
 
 //The CMake toolchain file
 CMAKE_TOOLCHAIN_FILE:FILEPATH=C:/Users/Mitch/esp/esp-idf/tools/cmake/toolchain-esp32.cmake
@@ -245,10 +245,13 @@ IDF_TARGET:STRING=esp32
 IDF_TOOLCHAIN:STRING=gcc
 
 //No help, variable specified on the command line.
+IGNORE_EXTRA_COMPONENT:UNINITIALIZED=
+
+//No help, variable specified on the command line.
 PROJECT_SOURCE_DIR:UNINITIALIZED=C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband
 
 //No help, variable specified on the command line.
-PYTHON:UNINITIALIZED=C:/Users/Mitch/.espressif/python_env/idf5.1_py3.11_env/Scripts/python.exe
+PYTHON:UNINITIALIZED=C:/Users/Mitch/.espressif/python_env/idf5.2_py3.11_env/Scripts/python.exe
 
 //No help, variable specified on the command line.
 PYTHON_DEPS_CHECKED:UNINITIALIZED=1
@@ -388,7 +391,7 @@ CMAKE_MODULE_LINKER_FLAGS_RELWITHDEBINFO-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_NM
 CMAKE_NM-ADVANCED:INTERNAL=1
 //number of local generators
-CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=22
+CMAKE_NUMBER_OF_MAKEFILES:INTERNAL=23
 //ADVANCED property for variable: CMAKE_OBJCOPY
 CMAKE_OBJCOPY-ADVANCED:INTERNAL=1
 //ADVANCED property for variable: CMAKE_OBJDUMP

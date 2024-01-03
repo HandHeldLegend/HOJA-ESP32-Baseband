@@ -27,6 +27,7 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     {
         ESP_LOGI(TAG, "CONNECT");
         _xinput_ready = true;
+        app_set_connected(1);
         break;
     }
     case ESP_HIDD_PROTOCOL_MODE_EVENT:
@@ -151,9 +152,9 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         else
         {
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
+            
             _xinput_ready = true;
             app_set_connected(1);
-            // ble_hid_task_start_up();//todo: this should be on auth_complete (in GAP)
         }
         break;
 
@@ -335,6 +336,11 @@ void xinput_bt_sendinput(i2cinput_input_s *input)
 
     xi_input.button_back = input->button_minus;
     xi_input.button_menu = input->button_plus;
+
+    xi_input.button_guide = input->button_home;
+
+    xi_input.button_stick_l = input->button_stick_left;
+    xi_input.button_stick_r = input->button_stick_right;
 
     xi_input.button_a = input->button_a;
     xi_input.button_b = input->button_b;

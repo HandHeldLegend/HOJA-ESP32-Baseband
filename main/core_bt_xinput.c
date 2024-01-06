@@ -372,7 +372,7 @@ int core_bt_xinput_start(void)
     int err = 1;
 
     err = util_bluetooth_init(global_loaded_settings.device_mac);
-    err = util_bluetooth_register_app(&xinput_app_params, &xinput_hidd_config, true);
+    err = util_bluetooth_register_app(&xinput_app_params, &xinput_hidd_config);
 
     xTaskCreatePinnedToCore(_xinput_bt_input_task, 
                                 "XInput Send Task", 2048,

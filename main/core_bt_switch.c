@@ -33,9 +33,11 @@ typedef enum
 
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
-ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_IDLE;
+ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_SIMPLE;
 
 sw_input_s _switch_input_data = {};
+
+uint8_t _report_interval = 8;
 
 void _switch_bt_task_standard(void *parameters);
 void _switch_bt_task_empty(void *parameters);
@@ -51,13 +53,14 @@ void ns_controller_setinputreportmode(uint8_t report_mode)
     {
     // Standard
     case 0x30:
-        ESP_LOGI(TAG, "Starting standard report mode.");
+        ESP_LOGI(TAG, "Setting standard report mode.");
         ns_controller_input_task_set(NS_REPORT_MODE_FULL);
+
         break;
 
     // SimpleHID. Data pushes only on button press/release
     case 0x3F:
-        ESP_LOGI(TAG, "Starting short report mode.");
+        ESP_LOGI(TAG, "Setting short report mode.");
         ns_controller_input_task_set(NS_REPORT_MODE_SIMPLE);
         break;
 
@@ -140,11 +143,11 @@ void ns_controller_sleep_handle(ns_power_handle_t power_type)
     case NS_POWER_AWAKE:
         ESP_LOGI(TAG, "Controller set to awake.");
         _switch_power_state = NS_POWER_AWAKE;
-        //ns_controller_input_task_set(_switch_report_mode);
-        ns_controller_input_task_set(NS_REPORT_MODE_FULL);
+        ns_controller_input_task_set(_switch_report_mode);
         break;
 
     case NS_POWER_SLEEP:
+        _report_interval = 30;
         ESP_LOGI(TAG, "Controller set to sleep.");
         _switch_power_state = NS_POWER_SLEEP;
         if (_switch_bt_task_handle != NULL)
@@ -176,13 +179,23 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
     case ESP_BT_GAP_RMT_SRVC_REC_EVT:
         ESP_LOGI(TAG, "ESP_BT_GAP_RMT_SRVC_REC_EVT");
         break;
+
+    case ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT:
+        ESP_LOGI(TAG, "ACL Connect Complete.");
+        break;
+
+    case ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT:
+        ESP_LOGI(TAG, "ACL Disconnect Complete.");
+        //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
+        break;
+    
     case ESP_BT_GAP_AUTH_CMPL_EVT:
     {
         if (param->auth_cmpl.stat == ESP_BT_STATUS_SUCCESS)
         {
             ESP_LOGI(TAG, "authentication success: %s", param->auth_cmpl.device_name);
-            esp_log_buffer_hex(TAG, param->auth_cmpl.bda, ESP_BD_ADDR_LEN);
-            ns_controller_input_task_set(NS_REPORT_MODE_BLANK);
+            //esp_log_buffer_hex(TAG, param->auth_cmpl.bda, ESP_BD_ADDR_LEN);
+            
 
             // Set host bluetooth address
             memcpy(&global_loaded_settings.switch_host_mac[0], &param->auth_cmpl.bda[0], ESP_BD_ADDR_LEN);
@@ -192,6 +205,8 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             {
                 app_save_host_mac();
             }
+
+            //ns_controller_input_task_set(NS_REPORT_MODE_BLANK);
         }
         else
         {
@@ -206,14 +221,18 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         // If power mode is 0, there should be NO packets sent from the controller until
         // another power mode is initiated by the Nintendo Switch console.
         ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
-        if (param->mode_chg.mode == 0)
+        if (param->mode_chg.mode == ESP_BT_PM_MD_ACTIVE )
         {
-            ns_controller_sleep_handle(NS_POWER_SLEEP);
+            _report_interval = 8;
+            //ns_controller_sleep_handle(NS_POWER_SLEEP);
         }
         else
         {
-            ns_controller_sleep_handle(NS_POWER_AWAKE);
+            _report_interval = 30;
+            //ns_controller_sleep_handle(NS_POWER_AWAKE);
         }
+
+
         break;
     }
 
@@ -237,12 +256,17 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->start.status == ESP_OK)
             {
                 ESP_LOGI(TAG, "START OK");
-                ESP_LOGI(TAG, "Setting to connectable, discoverable");
-                esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-            }
-            else
-            {
-                ESP_LOGE(TAG, "START failed!");
+                if(util_bt_get_paired())
+                {
+                    ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
+                    esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+                    util_bluetooth_connect();
+                }
+                else
+                {
+                    ESP_LOGI(TAG, "Setting to connectable, discoverable.");
+                    esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+                }
             }
             break;
         }
@@ -254,7 +278,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
                 ESP_LOGI(TAG, "CONNECT OK");
                 ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable");
                 esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                ns_controller_input_task_set(NS_REPORT_MODE_SIMPLE);
+                ns_controller_sleep_handle(NS_POWER_AWAKE);
             }
             else
             {
@@ -358,27 +382,20 @@ int core_bt_switch_start(void)
             paired = true;
     }
 
-    // If we are already paired, attempt connection
-    if (paired)
+    if(paired)
     {
-        ESP_LOGI(TAG, "NS Paired, attempting to connect...");
-        err = util_bluetooth_register_app(&switch_app_params, &switch_hidd_config, false);
-        if (err == 1)
-        {
-            vTaskDelay(1500 / portTICK_PERIOD_MS);
-
-            // Set host bluetooth address
-            memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
-
-            util_bluetooth_connect(global_loaded_settings.paired_host_mac);
-        }
+        ESP_LOGI(TAG, "Paired host found, setting paired in util.");
+        util_bt_set_paired(true, global_loaded_settings.paired_host_mac);
     }
-    else
+
+    // Starting bt mode
+    err = util_bluetooth_register_app(&switch_app_params, &switch_hidd_config);
+    if (err == 1)
     {
-        
-        // Not paired, await pairing connection
-        ESP_LOGI(TAG, "NS not Paired, put into advertise mode...");
-        err = util_bluetooth_register_app(&switch_app_params, &switch_hidd_config, true);
+        vTaskDelay(1500 / portTICK_PERIOD_MS);
+
+        // Set host bluetooth address
+        memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
     }
 
     return 1;
@@ -427,8 +444,7 @@ void _switch_bt_task_standard(void *parameters)
         //_full_buffer[12] = 0x70;
 
         esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
-
-        vTaskDelay(8 / portTICK_PERIOD_MS);
+        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }
 
@@ -445,11 +461,11 @@ void _switch_bt_task_short(void *parameters)
 
         ns_report_clear(_short_buffer, 64);
 
-        _ns_report_setinputreport_short(_short_buffer);
+        _ns_report_setinputreport_short(_short_buffer, &_switch_input_data);
 
         esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x3F, 12, _short_buffer);
 
-        vTaskDelay(16 / portTICK_PERIOD_MS);
+        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }
 
@@ -461,8 +477,9 @@ void _switch_bt_task_empty(void *parameters)
 
     for (;;)
     {
-        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0xA1, SWITCH_BT_REPORT_SIZE, tmp);
-        vTaskDelay(8 / portTICK_PERIOD_MS);
+
+        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
+        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }
 

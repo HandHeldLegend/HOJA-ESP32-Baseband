@@ -6,305 +6,24 @@ TaskHandle_t _util_bt_timeout_task = NULL;
 
 esp_hidd_app_param_t hid_app_param = {0};
 
+uint8_t _util_bt_host_mac[6] = {0};
+bool _util_bt_host_paired = false;
+
 // TEMPLATE CALLBACK FUNCTIONS
 // USE THESE TO PASTE INTO YOUR OWN
 // CONTROLLER CORES FOR HANDLING
 
 // BT Classic HID Callbacks
 
-// Callbacks for HID report events
-void util_bt_hidd_cb(esp_hidd_cb_event_t event, esp_hidd_cb_param_t *param)
+void util_bt_set_paired(bool paired, uint8_t *host)
 {
-    static const char* TAG = "ns_bt_hidd_cb";
-
-    switch (event) {
-        case ESP_HIDD_INIT_EVT:
-            if (param->init.status == ESP_HIDD_SUCCESS) {
-                ESP_LOGI(TAG, "init hidd success!");
-            } else {
-                ESP_LOGI(TAG, "init hidd failed!");
-            }
-            break;
-        case ESP_HIDD_DEINIT_EVT:
-            break;
-        case ESP_HIDD_REGISTER_APP_EVT:
-            if (param->register_app.status == ESP_HIDD_SUCCESS) {
-                ESP_LOGI(TAG, "Register HIDD app parameters success!");
-                //if(param->register_app.bd_addr == NULL)
-                //{
-                //    ESP_LOGI(TAG, "bd_addr is undefined!");
-                //}
-            } else {
-                ESP_LOGI(TAG, "Register HIDD app parameters failed!");
-            }
-            break;
-        case ESP_HIDD_UNREGISTER_APP_EVT:
-            if (param->unregister_app.status == ESP_HIDD_SUCCESS) {
-                ESP_LOGI(TAG, "unregister app success!");
-            } else {
-                ESP_LOGI(TAG, "unregister app failed!");
-            }
-            break;
-        case ESP_HIDD_OPEN_EVT:
-            if (param->open.status == ESP_HIDD_SUCCESS) {
-                if (param->open.conn_status == ESP_HIDD_CONN_STATE_CONNECTING) {
-                    ESP_LOGI(TAG, "connecting...");
-                } else if (param->open.conn_status == ESP_HIDD_CONN_STATE_CONNECTED) {
-                    ESP_LOGI(TAG, "connected to %02x:%02x:%02x:%02x:%02x:%02x", param->open.bd_addr[0],
-                            param->open.bd_addr[1], param->open.bd_addr[2], param->open.bd_addr[3], param->open.bd_addr[4],
-                            param->open.bd_addr[5]);
-                    ESP_LOGI(TAG, "making self non-discoverable and non-connectable.");
-                    esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                } else {
-                    ESP_LOGI(TAG, "unknown connection status");
-                    ESP_LOGI(TAG, "making self non-discoverable and non-connectable.");
-                    esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                }
-            } else {
-                ESP_LOGI(TAG, "open failed!");
-                ESP_LOGI(TAG, "making self non-discoverable and non-connectable.");
-                esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-            }
-            break;
-        case ESP_HIDD_CLOSE_EVT:
-            ESP_LOGI(TAG, "ESP_HIDD_CLOSE_EVT");
-            if (param->close.status == ESP_HIDD_SUCCESS) {
-                if (param->close.conn_status == ESP_HIDD_CONN_STATE_DISCONNECTING) {
-                    ESP_LOGI(TAG, "disconnecting...");
-                } else if (param->close.conn_status == ESP_HIDD_CONN_STATE_DISCONNECTED) {
-                    ESP_LOGI(TAG, "disconnected!");
-                } else {
-                    ESP_LOGI(TAG, "unknown connection status");
-                }
-            } else {
-                ESP_LOGI(TAG, "close failed!");
-                ESP_LOGI(TAG, "making self non-discoverable and non-connectable.");
-                esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-            }
-            break;
-        case ESP_HIDD_SEND_REPORT_EVT:
-            break;
-        case ESP_HIDD_REPORT_ERR_EVT:
-            ESP_LOGI(TAG, "ESP_HIDD_REPORT_ERR_EVT");
-            break;
-        case ESP_HIDD_GET_REPORT_EVT:
-            ESP_LOGI(TAG, "ESP_HIDD_GET_REPORT_EVT id:0x%02x, type:%d, size:%d", param->get_report.report_id,
-                    param->get_report.report_type, param->get_report.buffer_size);
-            break;
-        case ESP_HIDD_SET_REPORT_EVT:
-            ESP_LOGI(TAG, "ESP_HIDD_SET_REPORT_EVT");
-            break;
-        case ESP_HIDD_SET_PROTOCOL_EVT:
-            ESP_LOGI(TAG, "ESP_HIDD_SET_PROTOCOL_EVT");
-            break;
-        case ESP_HIDD_INTR_DATA_EVT:
-            break;
-        case ESP_HIDD_VC_UNPLUG_EVT:
-            ESP_LOGI(TAG, "ESP_HIDD_VC_UNPLUG_EVT");
-            if (param->vc_unplug.status == ESP_HIDD_SUCCESS) {
-                if (param->close.conn_status == ESP_HIDD_CONN_STATE_DISCONNECTED) {
-                    ESP_LOGI(TAG, "disconnected!");
-                } else {
-                    ESP_LOGI(TAG, "unknown connection status");
-                }
-            } else {
-                ESP_LOGI(TAG, "close failed!");
-                ESP_LOGI(TAG, "making self non-discoverable and non-connectable.");
-                esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-            }
-            break;
-        default:
-            ESP_LOGI(TAG, "UNKNOWN EVENT: %d", event);
-
-            break;
-        }
+    _util_bt_host_paired = paired;
+    memcpy(_util_bt_host_mac, host, 6);
 }
 
-// BTC GAP Event Callback Template
-void util_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
+bool util_bt_get_paired(void)
 {
-    const char* TAG = "util_bluetooth_gap_cb";
-    switch (event) 
-    {
-        case ESP_BT_GAP_DISC_RES_EVT:
-            ESP_LOGI(TAG, "ESP_BT_GAP_DISC_RES_EVT");
-            //esp_log_buffer_hex(TAG, param->disc_res.bda, ESP_BD_ADDR_LEN);
-            break;
-        case ESP_BT_GAP_DISC_STATE_CHANGED_EVT:
-            ESP_LOGI(TAG, "ESP_BT_GAP_DISC_STATE_CHANGED_EVT");
-            break;
-        case ESP_BT_GAP_RMT_SRVCS_EVT:
-            ESP_LOGI(TAG, "ESP_BT_GAP_RMT_SRVCS_EVT");
-            ESP_LOGI(TAG, "%d", param->rmt_srvcs.num_uuids);
-            break;
-        case ESP_BT_GAP_RMT_SRVC_REC_EVT:
-            ESP_LOGI(TAG, "ESP_BT_GAP_RMT_SRVC_REC_EVT");
-            break;
-        case ESP_BT_GAP_AUTH_CMPL_EVT:{
-            if (param->auth_cmpl.stat == ESP_BT_STATUS_SUCCESS) {
-                ESP_LOGI(TAG, "authentication success: %s", param->auth_cmpl.device_name);
-                //esp_log_buffer_hex(TAG, param->auth_cmpl.bda, ESP_BD_ADDR_LEN);
-            } else {
-                ESP_LOGI(TAG, "authentication failed, status:%d", param->auth_cmpl.stat);
-            }
-            break;
-        }
-        case ESP_BT_GAP_MODE_CHG_EVT:{
-            ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
-            break;
-        }
-        
-        default:
-            ESP_LOGI(TAG, "UNKNOWN GAP EVT: %d", event);
-            break; 
-    }
-}
-
-// BLE Callbacks
-
-// BLE HIDD Event Callback Template
-static void util_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
-{
-    esp_hidd_event_t event = (esp_hidd_event_t)id;
-    esp_hidd_event_data_t *param = (esp_hidd_event_data_t *)event_data;
-    static const char *TAG = "HID_DEV_BLE";
-
-    switch (event) {
-    case ESP_HIDD_START_EVENT: {
-        ESP_LOGI(TAG, "START");
-        esp_hid_ble_gap_adv_start();
-        break;
-    }
-    case ESP_HIDD_CONNECT_EVENT: {
-        ESP_LOGI(TAG, "CONNECT");
-        //ble_hid_task_start_up();//todo: this should be on auth_complete (in GAP)
-        break;
-    }
-    case ESP_HIDD_PROTOCOL_MODE_EVENT: {
-        ESP_LOGI(TAG, "PROTOCOL MODE[%u]: %s", param->protocol_mode.map_index, param->protocol_mode.protocol_mode ? "REPORT" : "BOOT");
-        break;
-    }
-    case ESP_HIDD_CONTROL_EVENT: {
-        ESP_LOGI(TAG, "CONTROL[%u]: %sSUSPEND", param->control.map_index, param->control.control ? "EXIT_" : "");
-        break;
-    }
-    case ESP_HIDD_OUTPUT_EVENT: {
-        ESP_LOGI(TAG, "OUTPUT[%u]: %8s ID: %2u, Len: %d, Data:", param->output.map_index, esp_hid_usage_str(param->output.usage), param->output.report_id, param->output.length);
-        ESP_LOG_BUFFER_HEX(TAG, param->output.data, param->output.length);
-        break;
-    }
-    case ESP_HIDD_FEATURE_EVENT: {
-        ESP_LOGI(TAG, "FEATURE[%u]: %8s ID: %2u, Len: %d, Data:", param->feature.map_index, esp_hid_usage_str(param->feature.usage), param->feature.report_id, param->feature.length);
-        ESP_LOG_BUFFER_HEX(TAG, param->feature.data, param->feature.length);
-        break;
-    }
-    case ESP_HIDD_DISCONNECT_EVENT: {
-        ESP_LOGI(TAG, "DISCONNECT: %s", esp_hid_disconnect_reason_str(esp_hidd_dev_transport_get(param->disconnect.dev), param->disconnect.reason));
-        //ble_hid_task_shut_down();
-        esp_hid_ble_gap_adv_start();
-        break;
-    }
-    case ESP_HIDD_STOP_EVENT: {
-        ESP_LOGI(TAG, "STOP");
-        break;
-    }
-    default:
-        break;
-    }
-    return;
-}
-
-// BLE GAP Event Callback Template
-static void util_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *param)
-{
-    const char* TAG = "util_ble_gap_cb";
-
-    switch (event) {
-    /*
-     * SCAN
-     * */
-    case ESP_GAP_BLE_SCAN_PARAM_SET_COMPLETE_EVT: {
-        ESP_LOGV(TAG, "BLE GAP EVENT SCAN_PARAM_SET_COMPLETE");
-        //SEND_BLE_CB();
-        break;
-    }
-    case ESP_GAP_BLE_SCAN_RESULT_EVT: {
-        esp_ble_gap_cb_param_t *scan_result = (esp_ble_gap_cb_param_t *)param;
-        switch (scan_result->scan_rst.search_evt) {
-        case ESP_GAP_SEARCH_INQ_RES_EVT: {
-            break;
-        }
-        case ESP_GAP_SEARCH_INQ_CMPL_EVT:
-            ESP_LOGV(TAG, "BLE GAP EVENT SCAN DONE: %d", scan_result->scan_rst.num_resps);
-            //SEND_BLE_CB();
-            break;
-        default:
-            break;
-        }
-        break;
-    }
-    case ESP_GAP_BLE_SCAN_STOP_COMPLETE_EVT: {
-        ESP_LOGV(TAG, "BLE GAP EVENT SCAN CANCELED");
-        break;
-    }
-
-    /*
-     * ADVERTISEMENT
-     * */
-    case ESP_GAP_BLE_ADV_DATA_SET_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP ADV_DATA_SET_COMPLETE");
-        break;
-
-    case ESP_GAP_BLE_ADV_START_COMPLETE_EVT:
-        ESP_LOGV(TAG, "BLE GAP ADV_START_COMPLETE");
-        break;
-
-    /*
-     * AUTHENTICATION
-     * */
-    case ESP_GAP_BLE_AUTH_CMPL_EVT:
-        if (!param->ble_security.auth_cmpl.success) {
-            ESP_LOGE(TAG, "BLE GAP AUTH ERROR: 0x%x", param->ble_security.auth_cmpl.fail_reason);
-        } else {
-            ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
-        }
-        break;
-
-    case ESP_GAP_BLE_KEY_EVT: //shows the ble key info share with peer device to the user.
-        //ESP_LOGI(TAG, "BLE GAP KEY type = %s", esp_ble_key_type_str(param->ble_security.ble_key.key_type));
-        break;
-
-    case ESP_GAP_BLE_PASSKEY_NOTIF_EVT: // ESP_IO_CAP_OUT
-        // The app will receive this evt when the IO has Output capability and the peer device IO has Input capability.
-        // Show the passkey number to the user to input it in the peer device.
-        ESP_LOGI(TAG, "BLE GAP PASSKEY_NOTIF passkey:%d", (unsigned int) param->ble_security.key_notif.passkey);
-        break;
-
-    case ESP_GAP_BLE_NC_REQ_EVT: // ESP_IO_CAP_IO
-        // The app will receive this event when the IO has DisplayYesNO capability and the peer device IO also has DisplayYesNo capability.
-        // show the passkey number to the user to confirm it with the number displayed by peer device.
-        ESP_LOGI(TAG, "BLE GAP NC_REQ passkey:%d", (unsigned int) param->ble_security.key_notif.passkey);
-        esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true);
-        break;
-
-    case ESP_GAP_BLE_PASSKEY_REQ_EVT: // ESP_IO_CAP_IN
-        // The app will receive this evt when the IO has Input capability and the peer device IO has Output capability.
-        // See the passkey number on the peer device and send it back.
-        ESP_LOGI(TAG, "BLE GAP PASSKEY_REQ");
-        //esp_ble_passkey_reply(param->ble_security.ble_req.bd_addr, true, 1234);
-        break;
-
-    case ESP_GAP_BLE_SEC_REQ_EVT:
-        ESP_LOGI(TAG, "BLE GAP SEC_REQ");
-        // Send the positive(true) security response to the peer device to accept the security request.
-        // If not accept the security request, should send the security response with negative(false) accept value.
-        esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
-        break;
-
-    default:
-        //ESP_LOGV(TAG, "BLE GAP EVENT %s", ble_gap_evt_str(event));
-        break;
-    }
+    return _util_bt_host_paired;
 }
 
 // Public variables
@@ -316,7 +35,7 @@ util_bt_hid_mode_t util_bt_hid_mode = UTIL_BT_MODE_CLASSIC;
 // Private functions
 
 // Register app with BT Classic
-int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_config_t *hidd_device_config, bool advertise)
+int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_config_t *hidd_device_config)
 {
     const char* TAG = "bt_register_app";
 
@@ -325,7 +44,7 @@ int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_con
     util_bt_hid_mode = UTIL_BT_MODE_CLASSIC;
 
     esp_bt_cod_t hid_cod;
-    hid_cod.minor = 0x4;
+    hid_cod.minor = 0x2 ;
     hid_cod.major = 0x5;
     hid_cod.service = 0x400;
     esp_bt_gap_set_cod(hid_cod, ESP_BT_SET_COD_MAJOR_MINOR);
@@ -350,49 +69,6 @@ int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_con
     }
 
     esp_bt_dev_set_device_name(hidd_device_config->device_name);
-
-    /*
-	ESP_LOGI(TAG, "Starting HID Device");
-	if ((ret = esp_bt_hid_device_init()) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "HID device failed to start:");
-        return -1;
-    }*/
-
-
-    /*
-    const char* desc = "Gamepad";
-
-    esp_hidd_app_param_t app_param = {
-        .desc_list      = hidd_device_config->report_maps[0].data,
-        .desc_list_len  = hidd_device_config->report_maps[0].len,
-        .description    = "Gamepad",
-        .subclass       = 0x08,
-        .name           = hidd_device_config->device_name,
-        .provider       = hidd_device_config->manufacturer_name,
-    };
-
-    memcpy(&hid_app_param, &app_param, sizeof(esp_hidd_app_param_t));
-
-    esp_hidd_qos_param_t both_qos = {0};
-
-    ESP_LOGI(TAG, "Register HID Device app");
-    if ((ret = esp_bt_hid_device_register_app(&hid_app_param, &both_qos, &both_qos)) != ESP_OK)
-    {
-        ESP_LOGE(TAG, "HID device register app failed:");
-        return -1;
-    }*/
-
-    
-
-    if (advertise)
-    {
-        esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-    }
-    else
-    {
-        esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-    }
     
     return 1;
 }
@@ -579,9 +255,8 @@ int util_bluetooth_init(uint8_t *mac_address)
  * 
  * @param util_bt_app_params Pointer to type of util_bt_app_params_s
  * @param hidd_device_config Pointer to type of esp_hid_device_config_t
- * @param advertise Whether the Bluetooth app should advertise. Only set this to true if your device is not yet paired. No impact in BLE mode.
 */
-int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_config_t *hidd_device_config, bool advertise)
+int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_config_t *hidd_device_config)
 {
     const char* TAG = "util_bluetooth_register_app";
     esp_err_t ret;
@@ -609,7 +284,7 @@ int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hi
             #if CONFIG_BT_HID_DEVICE_ENABLED
             bt_cfg.bt_max_acl_conn = 3;
             bt_cfg.bt_max_sync_conn = 3;
-            err = bt_register_app(util_bt_app_params, hidd_device_config, advertise);
+            err = bt_register_app(util_bt_app_params, hidd_device_config);
             #else
             ESP_LOGE(TAG, "BT Classic HID disabled. Enable in SDK settings. Also enable BT Dual mode.");
             return -1;
@@ -671,7 +346,7 @@ void util_bluetooth_deinit(void)
 /**
  * @brief Starts a bluetooth connection attempt.
 */
-void util_bluetooth_connect(uint8_t *mac_address)
+void util_bluetooth_connect()
 {
     const char* TAG = "util_bluetooth_connect";
 
@@ -685,8 +360,25 @@ void util_bluetooth_connect(uint8_t *mac_address)
     {
         case UTIL_BT_MODE_CLASSIC:
         {
-            esp_err_t  err = esp_bt_hid_device_connect(mac_address);
-            if (err != ESP_OK)
+            uint8_t attempts_remaining = 5;
+            bool connected = false;
+            while (attempts_remaining > 0)
+            {
+                esp_err_t  err = esp_bt_hid_device_connect(_util_bt_host_mac);
+                if (err != ESP_OK)
+                {
+                    attempts_remaining--;
+                    ESP_LOGE(TAG, "Connection attempt failed. Attempts remaining: %d", attempts_remaining);
+                    vTaskDelay(1000 / portTICK_PERIOD_MS);
+                }
+                else
+                {
+                    attempts_remaining = 0;
+                    connected = true;
+                }
+            }
+
+            if (!connected)
             {
                 // If connection directly failed, set discoverable.
                 esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);

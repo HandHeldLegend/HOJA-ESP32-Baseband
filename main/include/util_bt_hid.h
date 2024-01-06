@@ -57,12 +57,17 @@ extern util_bt_hid_mode_t util_bt_hid_mode;
 extern util_bt_app_params_s switch_app_params;
 
 // Public functions
+
+void util_bt_set_paired(bool paired, uint8_t *host);
+
+bool util_bt_get_paired(void);
+
 int util_bluetooth_init(uint8_t *mac_address);
 
-int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_config_t *hidd_device_config, bool advertise);
+int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_config_t *hidd_device_config);
 
 void util_bluetooth_deinit(void);
 
-void util_bluetooth_connect(uint8_t *mac_address);
+void util_bluetooth_connect(void);
 
 #endif

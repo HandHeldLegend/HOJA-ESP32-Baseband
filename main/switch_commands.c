@@ -290,6 +290,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
 
   // tud_hid_report(0x21, _switch_input_buffer, 64);
   esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x21, SWITCH_BT_REPORT_SIZE, _switch_input_buffer);
+  vTaskDelay(1/portTICK_PERIOD_MS);
 }
 
 // Handles an OUT report and responds accordingly.
@@ -383,22 +384,61 @@ void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data)
 
 }
 
+typedef union
+  {
+    struct
+    {
+      uint8_t down : 1;
+      uint8_t right : 1;
+      uint8_t left : 1;
+      uint8_t up : 1;
+      uint8_t sl : 1;
+      uint8_t sr : 1;
+      uint8_t reserved : 2;
+    };
+    uint8_t button_status;
+  } short_buttons_1_u;
+
+  typedef union
+  {
+    struct
+    {
+      uint8_t minus : 1;
+      uint8_t plus : 1;
+      uint8_t lstick : 1;
+      uint8_t rstick : 1;
+      uint8_t home : 1;
+      uint8_t capture : 1;
+      uint8_t lr    : 1;
+      uint8_t zlzr : 1;
+    };
+    uint8_t button_status;
+  } short_buttons_2_u;
+
 // Sets the input report for short mode.
-void _ns_report_setinputreport_short(uint8_t *buffer)
+void _ns_report_setinputreport_short(uint8_t *buffer, sw_input_s *input_data)
 {
-  buffer[0] = 0x00;
-  buffer[1] = 0x00;
+
+  static short_buttons_1_u short_buttons_1;
+  static short_buttons_2_u short_buttons_2;
+  short_buttons_1.down = input_data->b_b;
+  short_buttons_1.right = input_data->b_a;
+  short_buttons_1.left = input_data->b_y;
+  short_buttons_1.up = input_data->b_x;
+
+  buffer[0] = short_buttons_1.button_status;
+  buffer[1] = 0;
   buffer[2] = 0x8; // ns_input_short.stick_hat;
 
   // To-do: Sticks
-  buffer[3] = 0x00;
-  buffer[4] = 0x00;
-  buffer[5] = 0x00;
-  buffer[6] = 0x00;
-  buffer[7] = 0;
-  buffer[8] = 0;
-  buffer[9] = 0;
-  buffer[10] = 0;
+  buffer[3] = input_data->ls_x & 0xFF;
+  buffer[4] = (input_data->ls_x >> 8);
+  buffer[5] = input_data->ls_y & 0xFF;
+  buffer[6] = input_data->ls_y >> 8;
+  buffer[7] = input_data->rs_x & 0xFF;
+  buffer[8] = input_data->rs_x >> 8;
+  buffer[9] = input_data->rs_y & 0xFF;
+  buffer[10] = input_data->rs_y >> 8;
 }
 
 void ns_report_bulkset(uint8_t *buffer, uint8_t start_idx, uint8_t *data, uint8_t len)

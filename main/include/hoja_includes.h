@@ -10,6 +10,8 @@
 
 #include "hoja.h"
 
+#define HOJA_BASEBAND_VERSION 0xA002
+
 typedef enum
 {
     INPUT_MODE_LOAD     = -1,
@@ -19,6 +21,7 @@ typedef enum
     INPUT_MODE_N64      = 3,
     INPUT_MODE_SNES     = 4,
     INPUT_MODE_GCUSB    = 5,
+    INPUT_MODE_DS4      = 6,
 } input_mode_t;
 
 typedef enum
@@ -30,6 +33,7 @@ typedef enum
     I2CINPUT_ID_STOP    = 0x02,
     I2CINPUT_ID_SHUTDOWN = 0xA0,
     I2CINPUT_ID_CONNECTED = 0xA1,
+    I2CINPUT_ID_GETVERSION = 0xFF,
 } i2cinput_id_t;
 
 typedef struct
@@ -121,6 +125,7 @@ typedef struct
 
 #include "core_bt_xinput.h"
 #include "core_bt_switch.h"
+#include "core_bt_ds4.h"
 #include "util_bt_hid.h"
 
 #include "rsc_descriptors.h"

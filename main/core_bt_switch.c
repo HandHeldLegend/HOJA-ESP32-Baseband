@@ -33,7 +33,7 @@ typedef enum
 
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
-ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_SIMPLE;
+ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_FULL;
 
 sw_input_s _switch_input_data = {};
 

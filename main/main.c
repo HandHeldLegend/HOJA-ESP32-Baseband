@@ -215,7 +215,6 @@ void app_save_host_mac()
     memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
 }
 
-
 imu_data_s _new_imu = {0};
 
 void app_input(i2cinput_input_s *input)
@@ -266,9 +265,6 @@ void app_main(void)
 
         if (_i2c_read_msg(data))
         {
-            // First, write our response data
-            _i2c_write_status_msg();
-
             switch (data[3])
             {
                 default:
@@ -306,6 +302,13 @@ void app_main(void)
                         default:
                             break;
 
+                        case INPUT_MODE_DS4:
+                            _bluetooth_input_cb = ds4_bt_sendinput;
+                            ESP_LOGI(TAG, "DS4 BT Mode Init...");
+                            memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
+                            core_bt_ds4_start();
+                            break;
+
                         case INPUT_MODE_SWPRO:
                             _bluetooth_input_cb = switch_bt_sendinput;
                             ESP_LOGI(TAG, "Switch BT Mode Init...");
@@ -328,9 +331,27 @@ void app_main(void)
                     _unpack_i2c_msg(&(data[4]), &input);
                     app_input(&input);
                     memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
+                    // Write our response data
+                    _i2c_write_status_msg();
                 }
                 break;
+
+                case I2CINPUT_ID_GETVERSION:
+                {
+                    _msg_override_data[0] = I2CINPUT_ID_GETVERSION;
+                    _msg_override_data[1] = HOJA_BASEBAND_VERSION >> 8;
+                    _msg_override_data[2] = HOJA_BASEBAND_VERSION & 0xFF;
+                    _msg_override = true;
+
+                    // Write our response data
+                    _i2c_write_status_msg();
+                }
+                break;
+
+                
             }
+
+            
         }
     }
 }

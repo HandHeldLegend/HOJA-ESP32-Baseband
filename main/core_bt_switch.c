@@ -483,6 +483,8 @@ void _switch_bt_task_empty(void *parameters)
     }
 }
 
+#define ANALOG_DIGITAL_THRESH 650
+
 void switch_bt_sendinput(i2cinput_input_s *input)
 {
     _switch_input_data.ls_x = input->lx;
@@ -508,8 +510,8 @@ void switch_bt_sendinput(i2cinput_input_s *input)
 
     _switch_input_data.t_l = input->trigger_l;
     _switch_input_data.t_r = input->trigger_r;
-    _switch_input_data.t_zl = input->trigger_zl;
-    _switch_input_data.t_zr = input->trigger_zr;
+    _switch_input_data.t_zl = ((input->lt >= ANALOG_DIGITAL_THRESH) ? 1 : 0) | input->trigger_zl;
+    _switch_input_data.t_zr = ((input->rt >= ANALOG_DIGITAL_THRESH) ? 1 : 0) | input->trigger_zr;
 
     _switch_input_data.sb_left = input->button_stick_left;
     _switch_input_data.sb_right = input->button_stick_right;

@@ -10,7 +10,7 @@
 
 #include "hoja.h"
 
-#define HOJA_BASEBAND_VERSION 0xA002
+#define HOJA_BASEBAND_VERSION 0xA003
 
 typedef enum
 {

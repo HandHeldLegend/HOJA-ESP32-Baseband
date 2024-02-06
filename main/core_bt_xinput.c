@@ -53,13 +53,13 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
             uint8_t _rumble_intensity = (param->output.data[3] >= param->output.data[4]) ? param->output.data[3] : param->output.data[4];
             if(!_rumble_intensity)
             {
-                app_set_rumble(0);
+                app_set_rumble(0, 0);
             }
             else
             {
-                float _rumble_intensity_f = ((float)_rumble_intensity / 255.0f) * 100.0f;
+                float _rumble_intensity_f = ((float)_rumble_intensity / 255.0f) * 0xFFFF;
                 //ESP_LOGI("RUMBLE", "INTENSITY: %i", (uint8_t) _rumble_intensity_f);
-                app_set_rumble((uint8_t) _rumble_intensity_f);
+                app_set_rumble(40, (uint16_t) _rumble_intensity<<8);
             }
             
         }
@@ -328,8 +328,8 @@ void xinput_bt_sendinput(i2cinput_input_s *input)
     xi_input.stick_right_x  = input->rx << 4;
     xi_input.stick_right_y  = 0xFFFF - (input->ry << 4);
 
-    xi_input.analog_trigger_l = input->lt << 4;
-    xi_input.analog_trigger_r = input->rt << 4;
+    xi_input.analog_trigger_l = input->trigger_zl ? 1020 : (input->lt>>2);
+    xi_input.analog_trigger_r = input->trigger_zr ? 1020 : (input->rt>>2);
 
     xi_input.bumper_l = input->trigger_l;
     xi_input.bumper_r = input->trigger_r;

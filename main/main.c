@@ -104,8 +104,9 @@ void _i2c_write_status_msg()
     {
         uint8_t _msg_out[HOJA_I2C_MSG_SIZE_OUT] = {0};
         _msg_out[0] = I2CINPUT_ID_STATUS;
-        _msg_out[1] = _bluetooth_status.rumble_intensity;
-        _msg_out[2] = _bluetooth_status.connected_status;
+        _msg_out[1] = _bluetooth_status.connected_status;
+        memcpy(&_msg_out[2], &_bluetooth_status.rumble_amplitude, sizeof(uint16_t));
+        memcpy(&_msg_out[4], &_bluetooth_status.rumble_frequency, sizeof(float));
         //i2c_reset_tx_fifo(I2C_SLAVE_NUM);
         i2c_slave_write_buffer(I2C_SLAVE_NUM, _msg_out, HOJA_I2C_MSG_SIZE_OUT, portMAX_DELAY);
     }
@@ -174,17 +175,10 @@ bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
     return true;
 }
 
-void app_set_rumble(uint8_t intensity)
+void app_set_rumble(float frequency, uint16_t intensity)
 {
-    if(intensity>_bluetooth_status.rumble_intensity)
-    {
-        _bluetooth_status.rumble_intensity = (intensity>100) ? 100 : intensity;
-    }
-    else if (!intensity)
-    {
-        _bluetooth_status.rumble_intensity = 0;
-    }
-    
+    _bluetooth_status.rumble_frequency = frequency;
+    _bluetooth_status.rumble_amplitude = intensity;
 }
 
 void app_set_connected(uint8_t connected)

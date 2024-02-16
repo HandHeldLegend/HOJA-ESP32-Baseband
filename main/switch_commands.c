@@ -29,7 +29,7 @@ void ns_report_settimer(uint8_t *buffer)
   static int16_t _switch_timer = 0;
   buffer[0] = (uint8_t)_switch_timer;
   // printf("Td=%d \n", _switch_timer);
-  _switch_timer += 1;
+  _switch_timer += 6;
   if (_switch_timer > 0xFF)
   {
     _switch_timer -= 0xFF;
@@ -587,6 +587,7 @@ void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data)
   buffer[15] = _imu_tmp->ax_8h;
   buffer[16] = _imu_tmp->az_8l; // Z-axis
   buffer[17] = _imu_tmp->az_8h;
+
   buffer[18] = _imu_tmp->gy_8l;
   buffer[19] = _imu_tmp->gy_8h;
   buffer[20] = _imu_tmp->gx_8l;
@@ -603,6 +604,7 @@ void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data)
   buffer[27] = _imu_tmp->ax_8h;
   buffer[28] = _imu_tmp->az_8l; // Z-axis
   buffer[29] = _imu_tmp->az_8h;
+  
   buffer[30] = _imu_tmp->gy_8l;
   buffer[31] = _imu_tmp->gy_8h;
   buffer[32] = _imu_tmp->gx_8l;
@@ -619,6 +621,7 @@ void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data)
   buffer[39] = _imu_tmp->ax_8h;
   buffer[40] = _imu_tmp->az_8l; // Z-axis
   buffer[41] = _imu_tmp->az_8h;
+  
   buffer[42] = _imu_tmp->gy_8l;
   buffer[43] = _imu_tmp->gy_8h;
   buffer[44] = _imu_tmp->gx_8l;

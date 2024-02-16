@@ -443,7 +443,7 @@ void _switch_bt_task_standard(void *parameters)
         ns_report_setbattconn(_full_buffer);
         //_full_buffer[12] = 0x70;
 
-        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
+        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, 64, _full_buffer);
         vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }

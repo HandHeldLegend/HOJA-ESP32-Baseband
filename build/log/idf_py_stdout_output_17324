@@ -3,7 +3,7 @@
 -- Project sdkconfig file C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/sdkconfig
 Loading defaults file C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/sdkconfig.defaults...
 -- Compiler supported targets: xtensa-esp-elf
--- App "ESP32" version: 070431a-dirty
+-- App "ESP32" version: ece0799-dirty
 -- Adding linker script C:/Users/Mitch/GitRepos/HOJA-ESP32-Baseband/build/esp-idf/esp_system/ld/memory.ld
 -- Adding linker script C:/Users/Mitch/esp/esp-idf/components/esp_system/ld/esp32/sections.ld.in
 -- Adding linker script C:/Users/Mitch/esp/esp-idf/components/esp_rom/esp32/ld/esp32.rom.ld

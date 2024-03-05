@@ -1,6 +1,7 @@
 #ifndef HOJA_INCLUDES_H
 #define HOJA_INCLUDES_H
 
+#define HOJA_BASEBAND_VERSION 0xA004
 #include <string.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -8,20 +9,45 @@
 #include <assert.h>
 #include <stdint.h>
 
-#include "hoja.h"
+#include "sdkconfig.h"
+#include "esp_system.h"
+#include "esp_mac.h"
 
-#define HOJA_BASEBAND_VERSION 0xA003
+#include "esp_hid_common.h"
+#include "esp_hidd.h"
+
+#include "esp_hidd_api.h"
+#include "esp_bt_main.h"
+#include "esp_bt_device.h"
+#include "esp_bt.h"
+#include "esp_bt_defs.h"
+#include "esp_gap_bt_api.h"
+#include "esp_gap_ble_api.h"
+
+#include "nvs.h"
+#include "nvs_flash.h"
+
+#include "esp_hid_gap.h"
+#include "esp_log.h"
+#include "esp_err.h"
+
+#include "driver/i2c.h"
+
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "freertos/semphr.h"
 
 typedef enum
 {
     INPUT_MODE_LOAD     = -1,
     INPUT_MODE_SWPRO    = 0,
     INPUT_MODE_XINPUT   = 1,
-    INPUT_MODE_GAMECUBE = 2,
-    INPUT_MODE_N64      = 3,
-    INPUT_MODE_SNES     = 4,
-    INPUT_MODE_GCUSB    = 5,
+    INPUT_MODE_GCUSB    = 2,
+    INPUT_MODE_GAMECUBE = 3,
+    INPUT_MODE_N64      = 4,
+    INPUT_MODE_SNES     = 5,
     INPUT_MODE_DS4      = 6,
+    INPUT_MODE_MAX,
 } input_mode_t;
 
 typedef enum
@@ -99,29 +125,11 @@ typedef struct
     
 } i2cinput_input_s;
 
-#include "sdkconfig.h"
-#include "esp_system.h"
-#include "esp_mac.h"
+#include "hoja.h"
 
 #include "switch_analog.h"
 #include "switch_commands.h"
 #include "switch_spi.h"
-
-// Bluetooth stuff
-
-#include "esp_hid_common.h"
-#include "esp_hidd.h"
-
-#include "esp_hidd_api.h"
-#include "esp_bt_main.h"
-#include "esp_bt_device.h"
-#include "esp_bt.h"
-#include "esp_bt_defs.h"
-#include "esp_gap_bt_api.h"
-#include "esp_gap_ble_api.h"
-
-#include "nvs.h"
-#include "nvs_flash.h"
 
 #include "core_bt_xinput.h"
 #include "core_bt_switch.h"
@@ -130,15 +138,6 @@ typedef struct
 
 #include "rsc_descriptors.h"
 
-#include "esp_hid_gap.h"
-#include "esp_log.h"
-#include "esp_err.h"
-
-#include "driver/i2c.h"
-
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "freertos/semphr.h"
 
 
 #endif 

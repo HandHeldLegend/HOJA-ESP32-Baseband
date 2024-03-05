@@ -1,4 +1,5 @@
 #include "core_bt_switch.h"
+#include "esp_log.h"
 
 /**
  * @brief NS Core Report mode enums

@@ -11,7 +11,7 @@
 
 #define DATA_LENGTH 64 /*!< Data buffer length of test buffer */
 #define HOJA_I2C_MSG_SIZE_IN 32
-#define HOJA_I2C_MSG_SIZE_OUT 8
+#define HOJA_I2C_MSG_SIZE_OUT 11+1
 
 #define I2C_SLAVE_SCL_IO 20                    /*!< gpio number for i2c slave clock */
 #define I2C_SLAVE_SDA_IO 19                    /*!< gpio number for i2c slave data */
@@ -31,28 +31,28 @@ hoja_settings_s global_loaded_settings = {0};
 bool     _msg_override = false;
 uint8_t  _msg_override_data[HOJA_I2C_MSG_SIZE_OUT]  = {0};
 
-void _unpack_i2c_msg(uint8_t *input, i2cinput_input_s *output)
-{
-    // Unpack buttons_all
-    output->buttons_all = input[0] | (input[1] << 8);
-    output->buttons_system = input[2];
-
-    // Unpack LX, LY, RX, RY, LT, RT
-    output->lx = input[3] | (input[4] << 8);
-    output->ly = input[5] | (input[6] << 8);
-    output->rx = input[7] | (input[8] << 8);
-    output->ry = input[9] | (input[10] << 8);
-    output->lt = input[11] | (input[12] << 8);
-    output->rt = input[13] | (input[14] << 8);
-
-    // Unpack AX, AY, AZ, GX, GY, GZ
-    output->ax = input[15] | (input[16] << 8);
-    output->ay = input[17] | (input[18] << 8);
-    output->az = input[19] | (input[20] << 8);
-    output->gx = input[21] | (input[22] << 8);
-    output->gy = input[23] | (input[24] << 8);
-    output->gz = input[25] | (input[26] << 8);
-}
+//void _unpack_i2c_msg(uint8_t *input, i2cinput_input_s *output)
+//{
+//    // Unpack buttons_all
+//    output->buttons_all = input[0] | (input[1] << 8);
+//    output->buttons_system = input[2];
+//
+//    // Unpack LX, LY, RX, RY, LT, RT
+//    output->lx = input[3] | (input[4] << 8);
+//    output->ly = input[5] | (input[6] << 8);
+//    output->rx = input[7] | (input[8] << 8);
+//    output->ry = input[9] | (input[10] << 8);
+//    output->lt = input[11] | (input[12] << 8);
+//    output->rt = input[13] | (input[14] << 8);
+//
+//    // Unpack AX, AY, AZ, GX, GY, GZ
+//    output->ax = input[15] | (input[16] << 8);
+//    output->ay = input[17] | (input[18] << 8);
+//    output->az = input[19] | (input[20] << 8);
+//    output->gx = input[21] | (input[22] << 8);
+//    output->gy = input[23] | (input[24] << 8);
+//    output->gz = input[25] | (input[26] << 8);
+//}
 
 bool _i2c_read_msg(uint8_t *buffer)
 {
@@ -104,9 +104,9 @@ void _i2c_write_status_msg()
     {
         uint8_t _msg_out[HOJA_I2C_MSG_SIZE_OUT] = {0};
         _msg_out[0] = I2CINPUT_ID_STATUS;
-        _msg_out[1] = _bluetooth_status.connected_status;
-        memcpy(&_msg_out[2], &_bluetooth_status.rumble_amplitude, sizeof(uint16_t));
-        memcpy(&_msg_out[4], &_bluetooth_status.rumble_frequency, sizeof(float));
+
+        memcpy(&(_msg_out[1]), &(_bluetooth_status), 11);
+
         //i2c_reset_tx_fifo(I2C_SLAVE_NUM);
         i2c_slave_write_buffer(I2C_SLAVE_NUM, _msg_out, HOJA_I2C_MSG_SIZE_OUT, portMAX_DELAY);
     }
@@ -175,10 +175,12 @@ bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
     return true;
 }
 
-void app_set_rumble(float frequency, uint16_t intensity)
+void app_set_rumble(float frequency_hi, uint8_t amplitude_hi, float frequency_lo, uint8_t amplitude_lo)
 {
-    _bluetooth_status.rumble_frequency = frequency;
-    _bluetooth_status.rumble_amplitude = intensity;
+    _bluetooth_status.rumble_frequency_hi = frequency_hi;
+    _bluetooth_status.rumble_amplitude_hi = amplitude_hi;
+    _bluetooth_status.rumble_frequency_lo = frequency_lo;
+    _bluetooth_status.rumble_amplitude_lo = amplitude_lo;
 }
 
 void app_set_connected(uint8_t connected)
@@ -322,7 +324,7 @@ void app_main(void)
 
                 case I2CINPUT_ID_INPUT:
                 {
-                    _unpack_i2c_msg(&(data[4]), &input);
+                    memcpy(&input, &(data[4]), sizeof(i2cinput_input_s));
                     app_input(&input);
                     memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
                     // Write our response data

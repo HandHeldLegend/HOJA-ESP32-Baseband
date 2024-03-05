@@ -371,18 +371,12 @@ void switch_rumble_translate(const uint8_t *data)
   ahi = _get_amplitude(hacode);
   alo = _get_amplitude(lacode);
 
-  if(alo>=ahi)
-  {
-    alo = (alo>0) ? powf(alo, 0.65f) : 0;
-    out_amps = 0xFFFF * alo;
-    app_set_rumble(flo, (uint16_t) out_amps);
-  }
-  else
-  {
-    ahi = (ahi>0) ? powf(ahi, 0.65f) : 0;
-    out_amps = 0xFFFF * ahi;
-    app_set_rumble(fhi, (uint16_t) out_amps);
-  }
+  uint16_t ahi_i = 100 * ahi;
+  ahi_i = (ahi_i > 100) ? 100 : ahi_i;
+  uint16_t alo_i = 100 * alo;
+  alo_i = (alo_i > 100) ? 100 : alo_i;
+
+  app_set_rumble(fhi, ahi_i, flo, alo_i);
 }
 
 // Handles a command, always 0x21 as a response ID

@@ -5,6 +5,7 @@
 
 // Include any necessary includes from HOJA backend
 #include "hoja_includes.h"
+#include "hoja.h"
 
 extern sw_input_s _switch_input_data;
 

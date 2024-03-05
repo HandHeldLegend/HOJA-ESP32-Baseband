@@ -53,13 +53,14 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
             uint8_t _rumble_intensity = (param->output.data[3] >= param->output.data[4]) ? param->output.data[3] : param->output.data[4];
             if(!_rumble_intensity)
             {
-                app_set_rumble(0, 0);
+                app_set_rumble(0, 0, 0, 0);
             }
             else
             {
-                float _rumble_intensity_f = ((float)_rumble_intensity / 255.0f) * 0xFFFF;
+                float _rumble_intensity_f = ((float)_rumble_intensity / 255.0f) * 100;
+                _rumble_intensity_f = (_rumble_intensity_f>100) ? 100 : _rumble_intensity_f;
                 //ESP_LOGI("RUMBLE", "INTENSITY: %i", (uint8_t) _rumble_intensity_f);
-                app_set_rumble(40, (uint16_t) _rumble_intensity<<8);
+                app_set_rumble(40, (uint8_t) _rumble_intensity, 40, (uint8_t) _rumble_intensity);
             }
             
         }

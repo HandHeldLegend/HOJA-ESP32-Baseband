@@ -378,11 +378,11 @@ void util_bluetooth_connect()
                 }
             }
 
-            if (!connected)
-            {
-                // If connection directly failed, set discoverable.
-                esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-            }
+            //if (!connected)
+            //{
+            //    // If connection directly failed, set discoverable.
+            //    esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+            //}
         }
         break;
 

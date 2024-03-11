@@ -24,16 +24,33 @@ void ns_report_setsubcmd(uint8_t *buffer, uint8_t command)
   buffer[13] = command;
 }
 
+uint32_t adapter_ll_get_timestamp_us()
+{
+    int64_t t = esp_timer_get_time();
+
+    if(t>0xFFFFFFFF) t-=0xFFFFFFFF;
+    return (uint32_t)t;
+}
+
 void ns_report_settimer(uint8_t *buffer)
 {
-  static int16_t _switch_timer = 0;
-  buffer[0] = (uint8_t)_switch_timer;
-  // printf("Td=%d \n", _switch_timer);
-  _switch_timer += 6;
-  if (_switch_timer > 0xFF)
+  static uint16_t last_timer_output = 0;
+  static uint64_t last_time = 0;
+
+  buffer[0] = (uint8_t) last_timer_output;
+
+  uint64_t this_time = adapter_ll_get_timestamp_us();
+  uint64_t delta_time = this_time - last_time;
+  last_time = this_time;
+
+  float delta_ms = (float) delta_time / 1250.0f;
+  last_timer_output = last_timer_output + (uint16_t) delta_ms;
+
+  if (last_timer_output > 0xFF)
   {
-    _switch_timer -= 0xFF;
+    last_timer_output -= 0xFF;
   }
+  
 }
 
 void ns_report_setbattconn(uint8_t *buffer)
@@ -410,7 +427,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     break;
 
   case SW_CMD_ENABLE_IMU:
-    printf("Enable IMU: %d\n", data[11]);
+    printf("Enable IMU: %d\n", data[10]);
     // imu_set_enabled(data[11]>0);
     ns_report_setack(0x80);
     break;
@@ -434,12 +451,13 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     break;
 
   case SW_CMD_SET_SHIPMODE:
-    printf("Set ship mode: %X\n", data[11]);
+    printf("Set ship mode: %X\n", data[10]);
     ns_report_setack(0x80);
     break;
 
   case SW_CMD_SET_HCI:
     // For now all options should shut down
+    printf("Set HCI %X\n", data[10]);
     app_send_command(I2CINPUT_ID_SHUTDOWN, 0x00);
     break;
 
@@ -528,7 +546,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
 
   // tud_hid_report(0x21, _switch_input_buffer, 64);
   esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x21, SWITCH_BT_REPORT_SIZE, _switch_input_buffer);
-  vTaskDelay(1/portTICK_PERIOD_MS);
+  vTaskDelay(18/portTICK_PERIOD_MS);
 }
 
 // Handles an OUT report and responds accordingly.

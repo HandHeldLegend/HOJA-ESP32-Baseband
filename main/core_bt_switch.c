@@ -34,7 +34,8 @@ typedef enum
 
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
-ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_FULL;
+ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_BLANK;
+bool _switch_hid_connected = false;
 
 sw_input_s _switch_input_data = {};
 
@@ -76,29 +77,27 @@ void ns_controller_setinputreportmode(uint8_t report_mode)
 
 void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 {
+
+    if(_switch_bt_task_handle!=NULL)
+    {
+        vTaskDelete(_switch_bt_task_handle);
+        _switch_bt_task_handle = NULL;
+    }
+
     const char *TAG = "ns_controller_input_task_set";
     switch (report_mode_type)
     {
     default:
     case NS_REPORT_MODE_IDLE:
-        ESP_LOGI(TAG, "Start input IDLE task...");
+        ESP_LOGI(TAG, "Clearing input task");
         // Just stop all tasks and clear report mode internal.
-        if (_switch_bt_task_handle != NULL)
-        {
-            vTaskDelete(_switch_bt_task_handle);
-            _switch_bt_task_handle = NULL;
-        }
-        _switch_report_mode = NS_REPORT_MODE_IDLE;
+
+        //_switch_report_mode = NS_REPORT_MODE_IDLE;
         break;
 
     case NS_REPORT_MODE_BLANK:
         ESP_LOGI(TAG, "Start input BLANK task...");
-        if (_switch_bt_task_handle != NULL)
-        {
-            vTaskDelete(_switch_bt_task_handle);
-            _switch_bt_task_handle = NULL;
-        }
-
+    
         _switch_report_mode = NS_REPORT_MODE_BLANK;
         xTaskCreatePinnedToCore(_switch_bt_task_empty,
                                 "Blank Send Task", 2048,
@@ -107,11 +106,6 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 
     case NS_REPORT_MODE_SIMPLE:
         ESP_LOGI(TAG, "Start input SIMPLE task...");
-        if (_switch_bt_task_handle != NULL)
-        {
-            vTaskDelete(_switch_bt_task_handle);
-            _switch_bt_task_handle = NULL;
-        }
 
         // Set the internal reporting mode.
         _switch_report_mode = NS_REPORT_MODE_SIMPLE;
@@ -122,11 +116,7 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 
     case NS_REPORT_MODE_FULL:
         ESP_LOGI(TAG, "Start input FULL task...");
-        if (_switch_bt_task_handle != NULL)
-        {
-            vTaskDelete(_switch_bt_task_handle);
-            _switch_bt_task_handle = NULL;
-        }
+
         _switch_report_mode = NS_REPORT_MODE_FULL;
         xTaskCreatePinnedToCore(_switch_bt_task_standard,
                                 "Standard Send Task", 2048,
@@ -135,29 +125,12 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
     }
 }
 
-void ns_controller_sleep_handle(ns_power_handle_t power_type)
+uint16_t _hcif_report_interval = 24;
+uint16_t _hcif_report_mode = 0;
+void btm_hcif_mode_change_cb(uint8_t mode, uint16_t interval)
 {
-    const char *TAG = "ns_controller_sleep_handle";
-    switch (power_type)
-    {
-    default:
-    case NS_POWER_AWAKE:
-        ESP_LOGI(TAG, "Controller set to awake.");
-        _switch_power_state = NS_POWER_AWAKE;
-        ns_controller_input_task_set(_switch_report_mode);
-        break;
-
-    case NS_POWER_SLEEP:
-        _report_interval = 30;
-        ESP_LOGI(TAG, "Controller set to sleep.");
-        _switch_power_state = NS_POWER_SLEEP;
-        if (_switch_bt_task_handle != NULL)
-        {
-            vTaskDelete(_switch_bt_task_handle);
-            _switch_bt_task_handle = NULL;
-        }
-        break;
-    }
+    _hcif_report_mode = mode;
+    _hcif_report_interval = interval;
 }
 
 // SWITCH BTC GAP Event Callback
@@ -182,12 +155,29 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         break;
 
     case ESP_BT_GAP_ACL_CONN_CMPL_STAT_EVT:
+        ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable");
+        esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
         ESP_LOGI(TAG, "ACL Connect Complete.");
         break;
 
     case ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT:
         ESP_LOGI(TAG, "ACL Disconnect Complete.");
-        //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
+        _switch_report_mode = NS_REPORT_MODE_BLANK;
+
+        app_set_connected(0);
+        
+        if(util_bt_get_paired())
+        {
+            ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
+            esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+            util_bluetooth_connect();
+        }
+        else
+        {
+            ESP_LOGI(TAG, "Setting to connectable, discoverable.");
+            esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+        }
+
         break;
     
     case ESP_BT_GAP_AUTH_CMPL_EVT:
@@ -222,15 +212,18 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         // If power mode is 0, there should be NO packets sent from the controller until
         // another power mode is initiated by the Nintendo Switch console.
         ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
-        if (param->mode_chg.mode == ESP_BT_PM_MD_ACTIVE )
-        {
-            _report_interval = 8;
-            //ns_controller_sleep_handle(NS_POWER_SLEEP);
+        if (!_hcif_report_interval && !_hcif_report_mode)
+        {   
+            ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
         }
         else
         {
-            _report_interval = 30;
-            //ns_controller_sleep_handle(NS_POWER_AWAKE);
+            if(_hcif_report_mode == 2)
+            {   
+                _report_interval = _hcif_report_interval;
+                ns_controller_input_task_set(_switch_report_mode);
+            }
+            
         }
 
 
@@ -276,10 +269,9 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->connect.status == ESP_OK)
             {
+                _switch_hid_connected = true;
                 ESP_LOGI(TAG, "CONNECT OK");
-                ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable");
-                esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                ns_controller_sleep_handle(NS_POWER_AWAKE);
+
             }
             else
             {
@@ -313,11 +305,11 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->disconnect.status == ESP_OK)
             {
+                ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
+                _switch_hid_connected = false;
                 ESP_LOGI(TAG, "DISCONNECT OK");
-                ns_controller_sleep_handle(NS_POWER_SLEEP);
-                app_set_connected(0);
-                ESP_LOGI(TAG, "Setting to connectable, discoverable again");
-                esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+                
+                
             }
             else
             {
@@ -435,6 +427,8 @@ void _switch_bt_task_standard(void *parameters)
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
     for (;;)
     {
+        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
+
         static uint8_t _full_buffer[64] = {0};
 
         ns_report_clear(_full_buffer, 64);
@@ -445,7 +439,6 @@ void _switch_bt_task_standard(void *parameters)
         //_full_buffer[12] = 0x70;
 
         esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, 64, _full_buffer);
-        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }
 
@@ -458,6 +451,8 @@ void _switch_bt_task_short(void *parameters)
 
     for (;;)
     {
+        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
+
         static uint8_t _short_buffer[64] = {0};
 
         ns_report_clear(_short_buffer, 64);
@@ -465,8 +460,6 @@ void _switch_bt_task_short(void *parameters)
         _ns_report_setinputreport_short(_short_buffer, &_switch_input_data);
 
         esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x3F, 12, _short_buffer);
-
-        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }
 
@@ -478,9 +471,8 @@ void _switch_bt_task_empty(void *parameters)
 
     for (;;)
     {
-
+        vTaskDelay(1000 / portTICK_PERIOD_MS);
         esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
-        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
     }
 }
 

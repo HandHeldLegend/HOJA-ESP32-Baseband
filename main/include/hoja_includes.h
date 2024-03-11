@@ -23,6 +23,7 @@
 #include "esp_bt_defs.h"
 #include "esp_gap_bt_api.h"
 #include "esp_gap_ble_api.h"
+#include "esp_timer.h"
 
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -60,6 +61,7 @@ typedef enum
     I2CINPUT_ID_SHUTDOWN = 0xA0,
     I2CINPUT_ID_CONNECTED = 0xA1,
     I2CINPUT_ID_GETVERSION = 0xFF,
+    I2CINPUT_ID_REBOOT = 0xA1,
 } i2cinput_id_t;
 
 typedef struct

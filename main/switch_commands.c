@@ -43,7 +43,7 @@ void ns_report_settimer(uint8_t *buffer)
   uint64_t delta_time = this_time - last_time;
   last_time = this_time;
 
-  float delta_ms = (float) delta_time / 1250.0f;
+  float delta_ms = roundf((float) delta_time / 1333.0f);
   last_timer_output = last_timer_output + (uint16_t) delta_ms;
 
   if (last_timer_output > 0xFF)

@@ -9,6 +9,8 @@
 
 extern sw_input_s _switch_input_data;
 
+void switch_bt_set_cmd_data(uint8_t *data, uint16_t len);
+
 void ns_controller_setinputreportmode(uint8_t report_mode);
 
 // Start the Nintendo Switch controller core

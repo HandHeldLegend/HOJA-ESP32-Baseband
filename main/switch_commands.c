@@ -34,6 +34,7 @@ uint32_t adapter_ll_get_timestamp_us()
 
 void ns_report_settimer(uint8_t *buffer)
 {
+  /*
   static uint16_t last_timer_output = 0;
   static uint64_t last_time = 0;
 
@@ -43,13 +44,17 @@ void ns_report_settimer(uint8_t *buffer)
   uint64_t delta_time = this_time - last_time;
   last_time = this_time;
 
-  float delta_ms = roundf((float) delta_time / 1333.0f);
+  float delta_ms = roundf((float) delta_time / 1000.0f);
   last_timer_output = last_timer_output + (uint16_t) delta_ms;
 
   if (last_timer_output > 0xFF)
   {
     last_timer_output -= 0xFF;
-  }
+  }*/
+
+  static uint16_t t = 0;
+  t = (t + 1) % 0xFF;
+  buffer[0] = (uint8_t) t;
   
 }
 
@@ -546,7 +551,6 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
 
   // tud_hid_report(0x21, _switch_input_buffer, 64);
   esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x21, SWITCH_BT_REPORT_SIZE, _switch_input_buffer);
-  vTaskDelay(18/portTICK_PERIOD_MS);
 }
 
 // Handles an OUT report and responds accordingly.
@@ -557,7 +561,8 @@ void ns_report_handler(uint8_t report_id, uint8_t *data, uint16_t len)
   // We have command data and possibly rumble
   case SW_OUT_ID_RUMBLE_CMD:
     switch_rumble_translate(&data[1]);
-    ns_subcommand_handler(data[9], data, len);
+    //ns_subcommand_handler(data[9], data, len);
+    switch_bt_set_cmd_data(data, len);
     break;
 
   case SW_OUT_ID_RUMBLE:

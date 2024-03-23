@@ -6,7 +6,6 @@
  */
 typedef enum
 {
-    NS_REPORT_MODE_IDLE,
     NS_REPORT_MODE_BLANK,
     NS_REPORT_MODE_SIMPLE,
     NS_REPORT_MODE_FULL,
@@ -32,14 +31,29 @@ typedef enum
     NS_STATUS_RUNNING,
 } ns_core_status_t;
 
+typedef enum
+{
+    NS_EVENT_HID_CHANGE,
+    NS_EVENT_REPORT_MODE_CHANGE,
+    NS_EVENT_INTERVAL_CHANGE,
+} ns_event_t;
+
+typedef struct
+{
+    ns_event_t event_id;
+    ns_report_mode_t report_mode;
+    uint16_t poll_interval;
+    bool hid_connected;
+} ns_event_s;
+
+QueueHandle_t ns_event_queue;
+
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
-ns_report_mode_t _switch_report_mode = NS_REPORT_MODE_BLANK;
-bool _switch_hid_connected = false;
 
 sw_input_s _switch_input_data = {};
 
-uint8_t _report_interval = 8;
+volatile uint8_t _report_interval = 8;
 
 void _switch_bt_task_standard(void *parameters);
 void _switch_bt_task_empty(void *parameters);
@@ -63,7 +77,7 @@ void ns_controller_setinputreportmode(uint8_t report_mode)
     // SimpleHID. Data pushes only on button press/release
     case 0x3F:
         ESP_LOGI(TAG, "Setting short report mode.");
-        ns_controller_input_task_set(NS_REPORT_MODE_SIMPLE);
+        //ns_controller_input_task_set(NS_REPORT_MODE_SIMPLE);
         break;
 
     // NFC/IR
@@ -77,34 +91,30 @@ void ns_controller_setinputreportmode(uint8_t report_mode)
 
 void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 {
-
-    if(_switch_bt_task_handle!=NULL)
-    {
-        vTaskDelete(_switch_bt_task_handle);
-        _switch_bt_task_handle = NULL;
-    }
-
     const char *TAG = "ns_controller_input_task_set";
+
+    ns_event_s event = {.event_id = NS_EVENT_REPORT_MODE_CHANGE};
+
     switch (report_mode_type)
     {
     default:
-    case NS_REPORT_MODE_IDLE:
-        ESP_LOGI(TAG, "Clearing input task");
-        // Just stop all tasks and clear report mode internal.
-
-        //_switch_report_mode = NS_REPORT_MODE_IDLE;
-        break;
+        ESP_LOGI(TAG, "Unhandled input task: %d", report_mode_type);
+    break;
 
     case NS_REPORT_MODE_BLANK:
-        ESP_LOGI(TAG, "Start input BLANK task...");
-    
-        _switch_report_mode = NS_REPORT_MODE_BLANK;
-        xTaskCreatePinnedToCore(_switch_bt_task_empty,
-                                "Blank Send Task", 2048,
+        ESP_LOGI(TAG, "Set Report Mode BLANK");
+        event.report_mode = NS_REPORT_MODE_BLANK;
+
+        if(_switch_bt_task_handle==NULL)
+        {
+            xTaskCreatePinnedToCore(_switch_bt_task_standard,
+                                "Standard Send Task", 2048,
                                 NULL, 0, &_switch_bt_task_handle, 0);
+        }
+        
         break;
 
-    case NS_REPORT_MODE_SIMPLE:
+    /*case NS_REPORT_MODE_SIMPLE:
         ESP_LOGI(TAG, "Start input SIMPLE task...");
 
         // Set the internal reporting mode.
@@ -112,25 +122,46 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
         xTaskCreatePinnedToCore(_switch_bt_task_short,
                                 "Standard Send Task", 2048,
                                 NULL, 0, &_switch_bt_task_handle, 0);
-        break;
+        break;*/
 
     case NS_REPORT_MODE_FULL:
-        ESP_LOGI(TAG, "Start input FULL task...");
-
-        _switch_report_mode = NS_REPORT_MODE_FULL;
-        xTaskCreatePinnedToCore(_switch_bt_task_standard,
-                                "Standard Send Task", 2048,
-                                NULL, 0, &_switch_bt_task_handle, 0);
+        ESP_LOGI(TAG, "Set Report Mode FULL");
+        event.report_mode = NS_REPORT_MODE_FULL;
         break;
     }
+
+    xQueueSend(ns_event_queue, &event, 0);
 }
 
 uint16_t _hcif_report_interval = 24;
 uint16_t _hcif_report_mode = 0;
+
 void btm_hcif_mode_change_cb(uint8_t mode, uint16_t interval)
 {
     _hcif_report_mode = mode;
     _hcif_report_interval = interval;
+
+    // This is critical for Nintendo Switch to act upon.
+    // If power mode is 0, there should be NO packets sent from the controller until
+    // another power mode is initiated by the Nintendo Switch console.
+    ns_event_s event = {.event_id = NS_EVENT_INTERVAL_CHANGE};
+
+    if ((!_hcif_report_interval && !_hcif_report_mode))
+    {   
+        // set interval to sniff interval
+        event.poll_interval = 0;
+        //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
+    }
+    else
+    {
+        if(_hcif_report_mode == 2)
+        {   
+            //ESP_LOGI(TAG, "Set Report Interval and non-idle: %d", _hcif_report_interval);
+            event.poll_interval = _hcif_report_interval;
+        }
+    }
+
+    xQueueSend(ns_event_queue, &event, 0);
 }
 
 // SWITCH BTC GAP Event Callback
@@ -158,11 +189,24 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable");
         esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
         ESP_LOGI(TAG, "ACL Connect Complete.");
+
+        // Start input loop task
+        if(_switch_bt_task_handle==NULL)
+        {
+            xTaskCreatePinnedToCore(_switch_bt_task_standard,
+                                "Standard Send Task", 4048,
+                                NULL, 0, &_switch_bt_task_handle, 0);
+        }
         break;
 
     case ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT:
         ESP_LOGI(TAG, "ACL Disconnect Complete.");
-        _switch_report_mode = NS_REPORT_MODE_BLANK;
+        
+        if(_switch_bt_task_handle!=NULL)
+        {
+            vTaskDelete(_switch_bt_task_handle);
+            _switch_bt_task_handle = NULL;
+        }
 
         app_set_connected(0);
         
@@ -211,21 +255,26 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         // This is critical for Nintendo Switch to act upon.
         // If power mode is 0, there should be NO packets sent from the controller until
         // another power mode is initiated by the Nintendo Switch console.
-        ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
-        if (!_hcif_report_interval && !_hcif_report_mode)
+        /*
+        ns_event_s event = {.event_id = NS_EVENT_INTERVAL_CHANGE};
+
+        if ((!_hcif_report_interval && !_hcif_report_mode))
         {   
-            ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
+            // set interval to sniff interval
+            event.poll_interval = 0;
+            //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
         }
         else
         {
             if(_hcif_report_mode == 2)
             {   
-                _report_interval = _hcif_report_interval;
-                ns_controller_input_task_set(_switch_report_mode);
+                ESP_LOGI(TAG, "Set Report Interval and non-idle: %d", _hcif_report_interval);
+                event.poll_interval = _hcif_report_interval;
             }
-            
         }
 
+        xQueueSend(ns_event_queue, &event, 0);*/
+        ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
 
         break;
     }
@@ -269,7 +318,8 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->connect.status == ESP_OK)
             {
-                _switch_hid_connected = true;
+                ns_event_s connect_event = {.event_id = NS_EVENT_HID_CHANGE, .hid_connected = true};
+                xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "CONNECT OK");
 
             }
@@ -305,11 +355,9 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->disconnect.status == ESP_OK)
             {
-                ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
-                _switch_hid_connected = false;
+                ns_event_s connect_event = {.event_id = NS_EVENT_HID_CHANGE, .hid_connected = false};
+                xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "DISCONNECT OK");
-                
-                
             }
             else
             {
@@ -320,7 +368,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
 
         case ESP_HIDD_STOP_EVENT:
         {
-            ESP_LOGI(TAG, "STOP");
+            ESP_LOGI(TAG, " HID STOP");
             break;
         }
 
@@ -422,23 +470,119 @@ void ns_savepairing(uint8_t *host_addr)
     // Save all settings send pairing info to RP2040
 }
 
+volatile bool _cmd_received = false;
+volatile uint8_t _cmd_data[64] = {0};
+volatile uint16_t _cmd_data_len = 0;
+
+void switch_bt_set_cmd_data(uint8_t *data, uint16_t len)
+{
+    memcpy(_cmd_data, data, sizeof(uint8_t)*len);
+    _cmd_data_len = len;
+    _cmd_received = true;
+}
+
 void _switch_bt_task_standard(void *parameters)
 {
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
+
+    ns_event_queue = xQueueCreate(10, sizeof(ns_event_s));
+    if (ns_event_queue == NULL) {
+        printf("Failed to create event queue\n");
+        return;
+    }
+
+    static bool _hid_connected = false;
+    static uint16_t _delay_time = 100;
+    static bool _idle = true;
+    static ns_report_mode_t _report_mode = NS_REPORT_MODE_FULL;
+    static ns_event_s received_event = {0};
+
+    //_report_mode = NS_REPORT_MODE_BLANK;
+    _hid_connected = false;
+    _delay_time = 100;
+    _idle = true;
+
     for (;;)
     {
-        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
+        while(uxQueueMessagesWaiting(ns_event_queue) > 0)
+        {
+            if(xQueueReceive(ns_event_queue, &received_event, 0))
+            {
+                switch(received_event.event_id)
+                {
+                    default:
+                        printf("Unhandled Event\n");
+                    break;
+
+                    case NS_EVENT_HID_CHANGE: // Adjust input mode
+                        _hid_connected = received_event.hid_connected;
+                        printf("HID Connected Event\n");
+                        vTaskDelay(350/portTICK_PERIOD_MS);
+                    break;
+
+                    case NS_EVENT_INTERVAL_CHANGE: // HID connected
+                        printf("Interval Event\n");
+                        if(!received_event.poll_interval)
+                        {
+                            _idle = true;
+                            vTaskDelay(350/portTICK_PERIOD_MS);
+                        }
+                        else 
+                        {
+                            _idle = false;
+                            _delay_time = received_event.poll_interval;
+                            //vTaskDelay(_delay_time/portTICK_PERIOD_MS);
+                        }
+                    break;
+
+                    case NS_EVENT_REPORT_MODE_CHANGE: // HID disconnected
+                        printf("Mode Change Event\n");
+                        _report_mode = received_event.report_mode;
+                    break;
+                }
+            }
+        }
 
         static uint8_t _full_buffer[64] = {0};
+        uint8_t tmp[49] = {0x00, 0x00};
 
-        ns_report_clear(_full_buffer, 64);
-        ns_report_setinputreport_full(_full_buffer, &_switch_input_data);
+        if( (_hid_connected))
+        {
+            if(_cmd_received)
+            {
+                _cmd_received = false;
+                //switch_rumble_translate(&_cmd_data[1]);
+                ns_subcommand_handler(_cmd_data[9], _cmd_data, _cmd_data_len);
+            }
+            else if(!_idle)
+            {
+                if(_report_mode == NS_REPORT_MODE_FULL)
+                {
+                    ns_report_clear(_full_buffer, 64);
+                    ns_report_setinputreport_full(_full_buffer, &_switch_input_data);
 
-        ns_report_settimer(_full_buffer);
-        ns_report_setbattconn(_full_buffer);
-        //_full_buffer[12] = 0x70;
+                    ns_report_settimer(_full_buffer);
+                    ns_report_setbattconn(_full_buffer);
+                    //_full_buffer[12] = 0x70;
 
-        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, 64, _full_buffer);
+                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
+                    vTaskDelay(_delay_time/portTICK_PERIOD_MS);
+                }
+                else
+                {
+                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
+                    vTaskDelay(24/portTICK_PERIOD_MS);
+                }
+            }
+            else
+            {
+                vTaskDelay(24/portTICK_PERIOD_MS);
+            }
+        }
+        else
+        {
+            vTaskDelay(24/portTICK_PERIOD_MS);
+        }
     }
 }
 
@@ -451,7 +595,7 @@ void _switch_bt_task_short(void *parameters)
 
     for (;;)
     {
-        vTaskDelay(_report_interval / portTICK_PERIOD_MS);
+        vTaskDelay(16 / portTICK_PERIOD_MS);
 
         static uint8_t _short_buffer[64] = {0};
 
@@ -471,8 +615,17 @@ void _switch_bt_task_empty(void *parameters)
 
     for (;;)
     {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
+        vTaskDelay(350 / portTICK_PERIOD_MS);
+        if(_cmd_received)
+        {
+            _cmd_received = false;
+            //switch_rumble_translate(&_cmd_data[1]);
+            ns_subcommand_handler(_cmd_data[9], _cmd_data, _cmd_data_len);
+        }
+        else
+        {
+            esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
+        }
     }
 }
 

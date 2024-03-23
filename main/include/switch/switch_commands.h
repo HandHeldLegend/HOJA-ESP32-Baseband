@@ -28,6 +28,8 @@
 void switch_rumble_translate(const uint8_t *data);
 void ns_report_handler(uint8_t report_id, uint8_t *data, uint16_t len);
 
+void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len);
+
 void ns_report_clear(uint8_t *buffer, uint16_t size);
 void ns_report_setack(uint8_t ack);
 void ns_report_setsubcmd(uint8_t *buffer, uint8_t command);

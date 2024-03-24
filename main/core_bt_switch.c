@@ -499,7 +499,7 @@ void _switch_bt_task_standard(void *parameters)
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
-    _delay_time = 100;
+    _delay_time = 8;
     _idle = true;
 
     for (;;)
@@ -517,7 +517,7 @@ void _switch_bt_task_standard(void *parameters)
                     case NS_EVENT_HID_CHANGE: // Adjust input mode
                         _hid_connected = received_event.hid_connected;
                         printf("HID Connected Event\n");
-                        vTaskDelay(350/portTICK_PERIOD_MS);
+                        
                     break;
 
                     case NS_EVENT_INTERVAL_CHANGE: // HID connected
@@ -525,13 +525,11 @@ void _switch_bt_task_standard(void *parameters)
                         if(!received_event.poll_interval)
                         {
                             _idle = true;
-                            vTaskDelay(350/portTICK_PERIOD_MS);
                         }
                         else 
                         {
                             _idle = false;
                             _delay_time = received_event.poll_interval;
-                            //vTaskDelay(_delay_time/portTICK_PERIOD_MS);
                         }
                     break;
 
@@ -540,6 +538,7 @@ void _switch_bt_task_standard(void *parameters)
                         _report_mode = received_event.report_mode;
                     break;
                 }
+                vTaskDelay(100/portTICK_PERIOD_MS);
             }
         }
 

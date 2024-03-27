@@ -1,12 +1,17 @@
 #include "core_bt_xinput.h"
 
-static bool _xinput_ready = false;
 TaskHandle_t _xinput_task_handler = NULL;
 
-bool xinput_bt_ready()
+QueueHandle_t _xinput_event_queue;
+
+void _xinput_bt_input_task(void * params);
+
+typedef struct
 {
-    return _xinput_ready;
-}
+    int event;
+    bool hid_connected;
+    bool gap_auth;
+} xinput_event_s;
 
 // XINPUT BLE HIDD callback
 void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
@@ -20,13 +25,18 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     case ESP_HIDD_START_EVENT:
     {
         ESP_LOGI(TAG, "START");
+        xTaskCreatePinnedToCore(_xinput_bt_input_task, 
+                                "XInput Send Task", 4036,
+                                NULL, 0, &_xinput_task_handler, 0);
+                                
         esp_hid_ble_gap_adv_start();
         break;
     }
     case ESP_HIDD_CONNECT_EVENT:
     {
         ESP_LOGI(TAG, "CONNECT");
-        _xinput_ready = true;
+        xinput_event_s connect_event = {.event = 0, .hid_connected = true};
+        xQueueSend(_xinput_event_queue, &connect_event, 0);
         app_set_connected(1);
         break;
     }
@@ -74,13 +84,24 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     case ESP_HIDD_DISCONNECT_EVENT:
     {
         ESP_LOGI(TAG, "DISCONNECT: %s", esp_hid_disconnect_reason_str(esp_hidd_dev_transport_get(param->disconnect.dev), param->disconnect.reason));
-        _xinput_ready=false;
+
+        xinput_event_s connect_event = {.event = 0, .hid_connected = false};
+        xQueueSend(_xinput_event_queue, &connect_event, 0);
+        
         esp_hid_ble_gap_adv_start();
         app_set_connected(0);
         break;
     }
     case ESP_HIDD_STOP_EVENT:
     {
+        xinput_event_s connect_event = {.event = 1, .gap_auth = false};
+        xQueueSend(_xinput_event_queue, &connect_event, 0);
+        vTaskDelay(8/portTICK_PERIOD_MS);
+        if (_xinput_task_handler != NULL)
+        {
+            vTaskDelete(_xinput_task_handler);
+            _xinput_task_handler = NULL;
+        }
         ESP_LOGI(TAG, "STOP");
         break;
     }
@@ -153,8 +174,8 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         else
         {
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
-            
-            _xinput_ready = true;
+            xinput_event_s connect_event = {.event = 1, .gap_auth = true};
+            xQueueSend(_xinput_event_queue, &connect_event, 0);
             app_set_connected(1);
         }
         break;
@@ -305,18 +326,34 @@ void _xinput_bt_input_task(void * params)
 {
     const char *TAG = "_xinput_bt_input_task";
     ESP_LOGI(TAG, "Starting XInput task loop.");
-    while(!xinput_bt_ready())
-    {
-        vTaskDelay(16/portTICK_PERIOD_MS);
+    static xinput_event_s received_event = {0};
+    static bool connected = false;
+    static bool gap_auth = false;
+
+    _xinput_event_queue = xQueueCreate(10, sizeof(xinput_event_s));
+    if (_xinput_event_queue == NULL) {
+        printf("Failed to create event queue\n");
+        return;
     }
 
     for(;;)
     {
+        if(xQueueReceive(_xinput_event_queue, &received_event, 0))
+        {
+            if(!received_event.event)
+                connected = received_event.hid_connected;
+            else
+            {
+                gap_auth = received_event.gap_auth;
+            }
+        }
 
-        memcpy(xi_buffer, &xi_input, XI_HID_LEN);
-        esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
-        
-        vTaskDelay(8/portTICK_PERIOD_MS);
+        if(connected && gap_auth)
+        {
+            memcpy(xi_buffer, &xi_input, XI_HID_LEN);
+            esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
+        }
+        vTaskDelay(2/portTICK_PERIOD_MS);
     }
 }
 
@@ -375,9 +412,7 @@ int core_bt_xinput_start(void)
     err = util_bluetooth_init(global_loaded_settings.device_mac);
     err = util_bluetooth_register_app(&xinput_app_params, &xinput_hidd_config);
 
-    xTaskCreatePinnedToCore(_xinput_bt_input_task, 
-                                "XInput Send Task", 2048,
-                                NULL, 0, &_xinput_task_handler, 0);
+    
     return err;
 }
 
@@ -386,6 +421,5 @@ void core_bt_xinput_stop(void)
     const char *TAG = "core_bt_xinput_stop";
 
     ESP_LOGI(TAG, "Stopping core...");
-    _xinput_ready = false;
     util_bluetooth_deinit();
 }

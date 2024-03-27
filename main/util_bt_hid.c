@@ -102,7 +102,7 @@ int ble_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_co
         .set_scan_rsp = false,
         .include_name = true,
         .include_txpower = true,
-        .min_interval = 0x0006, //slave connection min interval, Time = min_interval * 1.25 msec
+        .min_interval = 0x0001, //slave connection min interval, Time = min_interval * 1.25 msec
         .max_interval = 0x0010, //slave connection max interval, Time = max_interval * 1.25 msec
         .appearance = util_bt_app_params->appearance,
         .manufacturer_len = 0,

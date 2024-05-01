@@ -1,7 +1,8 @@
 #ifndef HOJA_INCLUDES_H
 #define HOJA_INCLUDES_H
 
-#define HOJA_BASEBAND_VERSION 0xA005
+#define HOJA_BASEBAND_VERSION 0xA006
+#include "hoja_types.h"
 #include <string.h>
 #include <inttypes.h>
 #include <stdbool.h>
@@ -37,6 +38,8 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 #include "freertos/semphr.h"
+
+#include "imu_tool.h"
 
 typedef enum
 {

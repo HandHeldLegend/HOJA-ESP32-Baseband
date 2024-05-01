@@ -3,6 +3,7 @@
 
 uint8_t _switch_input_buffer[64] = {0};
 uint8_t _switch_input_report_id = 0x00;
+uint8_t _switch_imu_mode = 0x00;
 
 void ns_report_clear(uint8_t *buffer, uint16_t size)
 {
@@ -34,23 +35,6 @@ uint32_t adapter_ll_get_timestamp_us()
 
 void ns_report_settimer(uint8_t *buffer)
 {
-  /*
-  static uint16_t last_timer_output = 0;
-  static uint64_t last_time = 0;
-
-  buffer[0] = (uint8_t) last_timer_output;
-
-  uint64_t this_time = adapter_ll_get_timestamp_us();
-  uint64_t delta_time = this_time - last_time;
-  last_time = this_time;
-
-  float delta_ms = roundf((float) delta_time / 1000.0f);
-  last_timer_output = last_timer_output + (uint16_t) delta_ms;
-
-  if (last_timer_output > 0xFF)
-  {
-    last_timer_output -= 0xFF;
-  }*/
 
   static uint16_t t = 0;
   t = (t + 1) % 0xFF;
@@ -79,12 +63,12 @@ void ns_report_setbattconn(uint8_t *buffer)
 
 void ns_report_sub_setdevinfo(uint8_t *buffer)
 {
-  /* New firmware causes issue with gyro needs more research
+  // New firmware causes issue with gyro needs more research
   _switch_input_buffer[14] = 0x04; // NS Firmware primary   (4.x)
-  _switch_input_buffer[15] = 0x33; // NS Firmware secondary (x.21) */
+  _switch_input_buffer[15] = 0x33; // NS Firmware secondary (x.21) 
 
-  buffer[14] = 0x03; // NS Firmware primary   (3.x)
-  buffer[15] = 0x80; // NS Firmware secondary (x.72)
+  //buffer[14] = 0x03; // NS Firmware primary   (3.x)
+  //buffer[15] = 0x80; // NS Firmware secondary (x.72)
 
   // Procon   - 0x03, 0x02
   // N64      - 0x0C, 0x11
@@ -434,6 +418,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
   case SW_CMD_ENABLE_IMU:
     printf("Enable IMU: %d\n", data[10]);
     // imu_set_enabled(data[11]>0);
+    _switch_imu_mode = data[10];
     ns_report_setack(0x80);
     break;
 
@@ -593,58 +578,70 @@ void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data)
   buffer[9] = (input_data->rs_x & 0xF00) >> 8;
   buffer[10] = (input_data->rs_y & 0xFF0) >> 4;
 
-  // Set gyro
-  // Retrieve and write IMU data
-  imu_data_s *_imu_tmp = imu_fifo_last();
+  if(_switch_imu_mode == 0x01)
+  {
+    // Set gyro
+    // Retrieve and write IMU data
+    imu_data_s *_imu_tmp = imu_fifo_last();
 
-  // Group 1
-  buffer[12] = _imu_tmp->ay_8l; // Y-axis
-  buffer[13] = _imu_tmp->ay_8h;
-  buffer[14] = _imu_tmp->ax_8l; // X-axis
-  buffer[15] = _imu_tmp->ax_8h;
-  buffer[16] = _imu_tmp->az_8l; // Z-axis
-  buffer[17] = _imu_tmp->az_8h;
+    // Group 1
+    buffer[12] = _imu_tmp->ay_8l; // Y-axis
+    buffer[13] = _imu_tmp->ay_8h;
+    buffer[14] = _imu_tmp->ax_8l; // X-axis
+    buffer[15] = _imu_tmp->ax_8h;
+    buffer[16] = _imu_tmp->az_8l; // Z-axis
+    buffer[17] = _imu_tmp->az_8h;
 
-  buffer[18] = _imu_tmp->gy_8l;
-  buffer[19] = _imu_tmp->gy_8h;
-  buffer[20] = _imu_tmp->gx_8l;
-  buffer[21] = _imu_tmp->gx_8h;
-  buffer[22] = _imu_tmp->gz_8l;
-  buffer[23] = _imu_tmp->gz_8h;
+    buffer[18] = _imu_tmp->gy_8l;
+    buffer[19] = _imu_tmp->gy_8h;
+    buffer[20] = _imu_tmp->gx_8l;
+    buffer[21] = _imu_tmp->gx_8h;
+    buffer[22] = _imu_tmp->gz_8l;
+    buffer[23] = _imu_tmp->gz_8h;
 
-  _imu_tmp = imu_fifo_last();
+    _imu_tmp = imu_fifo_last();
 
-  // Group 2
-  buffer[24] = _imu_tmp->ay_8l; // Y-axis
-  buffer[25] = _imu_tmp->ay_8h;
-  buffer[26] = _imu_tmp->ax_8l; // X-axis
-  buffer[27] = _imu_tmp->ax_8h;
-  buffer[28] = _imu_tmp->az_8l; // Z-axis
-  buffer[29] = _imu_tmp->az_8h;
-  
-  buffer[30] = _imu_tmp->gy_8l;
-  buffer[31] = _imu_tmp->gy_8h;
-  buffer[32] = _imu_tmp->gx_8l;
-  buffer[33] = _imu_tmp->gx_8h;
-  buffer[34] = _imu_tmp->gz_8l;
-  buffer[35] = _imu_tmp->gz_8h;
+    // Group 2
+    buffer[24] = _imu_tmp->ay_8l; // Y-axis
+    buffer[25] = _imu_tmp->ay_8h;
+    buffer[26] = _imu_tmp->ax_8l; // X-axis
+    buffer[27] = _imu_tmp->ax_8h;
+    buffer[28] = _imu_tmp->az_8l; // Z-axis
+    buffer[29] = _imu_tmp->az_8h;
+    
+    buffer[30] = _imu_tmp->gy_8l;
+    buffer[31] = _imu_tmp->gy_8h;
+    buffer[32] = _imu_tmp->gx_8l;
+    buffer[33] = _imu_tmp->gx_8h;
+    buffer[34] = _imu_tmp->gz_8l;
+    buffer[35] = _imu_tmp->gz_8h;
 
-  _imu_tmp = imu_fifo_last();
+    _imu_tmp = imu_fifo_last();
 
-  // Group 3
-  buffer[36] = _imu_tmp->ay_8l; // Y-axis
-  buffer[37] = _imu_tmp->ay_8h;
-  buffer[38] = _imu_tmp->ax_8l; // X-axis
-  buffer[39] = _imu_tmp->ax_8h;
-  buffer[40] = _imu_tmp->az_8l; // Z-axis
-  buffer[41] = _imu_tmp->az_8h;
-  
-  buffer[42] = _imu_tmp->gy_8l;
-  buffer[43] = _imu_tmp->gy_8h;
-  buffer[44] = _imu_tmp->gx_8l;
-  buffer[45] = _imu_tmp->gx_8h;
-  buffer[46] = _imu_tmp->gz_8l;
-  buffer[47] = _imu_tmp->gz_8h;
+    // Group 3
+    buffer[36] = _imu_tmp->ay_8l; // Y-axis
+    buffer[37] = _imu_tmp->ay_8h;
+    buffer[38] = _imu_tmp->ax_8l; // X-axis
+    buffer[39] = _imu_tmp->ax_8h;
+    buffer[40] = _imu_tmp->az_8l; // Z-axis
+    buffer[41] = _imu_tmp->az_8h;
+    
+    buffer[42] = _imu_tmp->gy_8l;
+    buffer[43] = _imu_tmp->gy_8h;
+    buffer[44] = _imu_tmp->gx_8l;
+    buffer[45] = _imu_tmp->gx_8h;
+    buffer[46] = _imu_tmp->gz_8l;
+    buffer[47] = _imu_tmp->gz_8h;
+  }
+  else if (_switch_imu_mode == 0x02)
+  {
+    // New Gyro test code
+    static mode_2_s mode_2_data = {0};
+
+    imu_pack_quat(&mode_2_data);
+
+    memcpy(&(buffer[12]), &mode_2_data, sizeof(mode_2_s));
+  }
 
 }
 

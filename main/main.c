@@ -31,29 +31,6 @@ hoja_settings_s global_loaded_settings = {0};
 bool     _msg_override = false;
 uint8_t  _msg_override_data[HOJA_I2C_MSG_SIZE_OUT]  = {0};
 
-//void _unpack_i2c_msg(uint8_t *input, i2cinput_input_s *output)
-//{
-//    // Unpack buttons_all
-//    output->buttons_all = input[0] | (input[1] << 8);
-//    output->buttons_system = input[2];
-//
-//    // Unpack LX, LY, RX, RY, LT, RT
-//    output->lx = input[3] | (input[4] << 8);
-//    output->ly = input[5] | (input[6] << 8);
-//    output->rx = input[7] | (input[8] << 8);
-//    output->ry = input[9] | (input[10] << 8);
-//    output->lt = input[11] | (input[12] << 8);
-//    output->rt = input[13] | (input[14] << 8);
-//
-//    // Unpack AX, AY, AZ, GX, GY, GZ
-//    output->ax = input[15] | (input[16] << 8);
-//    output->ay = input[17] | (input[18] << 8);
-//    output->az = input[19] | (input[20] << 8);
-//    output->gx = input[21] | (input[22] << 8);
-//    output->gy = input[23] | (input[24] << 8);
-//    output->gz = input[25] | (input[26] << 8);
-//}
-
 bool _i2c_read_msg(uint8_t *buffer)
 {
     uint8_t idx = 0;
@@ -133,32 +110,6 @@ static esp_err_t i2c_slave_init(void)
     return i2c_driver_install(i2c_slave_port, conf_slave.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
 }
 
-#define IMU_FIFO_COUNT 3
-#define IMU_FIFO_IDX_MAX (IMU_FIFO_COUNT-1)
-int _imu_fifo_idx = 0;
-imu_data_s _imu_fifo[IMU_FIFO_COUNT];
-
-// Add data to our FIFO
-void imu_fifo_push(imu_data_s *imu_data)
-{
-    int _i = (_imu_fifo_idx+1) % IMU_FIFO_COUNT;
-
-    _imu_fifo[_i].ax = imu_data->ax;
-    _imu_fifo[_i].ay = imu_data->ay;
-    _imu_fifo[_i].az = imu_data->az;
-
-    _imu_fifo[_i].gx = imu_data->gx;
-    _imu_fifo[_i].gy = imu_data->gy;
-    _imu_fifo[_i].gz = imu_data->gz;
-
-    _imu_fifo_idx = _i;
-}
-
-imu_data_s* imu_fifo_last()
-{
-  return &(_imu_fifo[_imu_fifo_idx]);
-}
-
 bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
 {
     ESP_LOGI("app_compare_mac", "Mac 1:");
@@ -211,10 +162,10 @@ void app_save_host_mac()
     memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
 }
 
-imu_data_s _new_imu = {0};
-
 void app_input(i2cinput_input_s *input)
 {
+    static imu_data_s _new_imu = {0};
+
     _new_imu.ax = input->ax;
     _new_imu.ay = input->ay;
     _new_imu.az = input->az;

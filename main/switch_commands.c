@@ -243,7 +243,11 @@ void switch_rumble_translate(const uint8_t *data)
       case 1:
       case 2:
       case 3:
-          //printf("Case 0-3\n");
+          printf("Case 0-3\n");
+          hfcode = 0;
+          lfcode = 0;
+          hacode = 0;
+          lacode = 0;
           /*
           amFmCodes[0] = (v9 >> 1) & 0x1F;
           amFmCodes[1] = (*((unsigned short *)data + 1) >> 4) & 0x1F;
@@ -252,12 +256,11 @@ void switch_rumble_translate(const uint8_t *data)
           amFmCodes[4] = (*(unsigned short *)data >> 5) & 0x1F;
           v12 = *data & 0x1F;
           */
-          return;
           break;
 
       // Dual frequency mode
       case 4:
-          //printf("Case 4\n");
+          printf("Case 4\n");
           
           // Low channel
           lfcode = (data[2]&0x7F); // Low Frequency
@@ -280,7 +283,7 @@ void switch_rumble_translate(const uint8_t *data)
       // Seems to be single wave mode
       case 5:
       case 6:
-          //printf("Case 5-6\n");
+          printf("Case 5-6\n");
           
           // Byte 0 is frequency and high/low select bit
           // check byte 0 bit 0
@@ -289,12 +292,12 @@ void switch_rumble_translate(const uint8_t *data)
 
           if (high_f_select)
           {
-              //printf("HF Bit ON\n");
+              printf("HF Bit ON\n");
               
               hfcode = (data[0]>>1);
               hacode = (data[1] & 0xF) << 3;
               
-              //printf("LF is 160hz.");
+              printf("LF is 160hz.");
               lfcode = 0;
               lacode = ( ((data[2] & 0x1)<<3) | ( (data[1]&0xE0)>>5 ) ) << 3;
               flo = 160.0f;
@@ -302,12 +305,12 @@ void switch_rumble_translate(const uint8_t *data)
               
           else
           {
-              //printf("LF Bit ON\n");
+              printf("LF Bit ON\n");
               
               lfcode = (data[0]>>1);
               hacode = (data[1] & 0xF) << 3;
               
-              //printf("HF is 320hz.");
+              printf("HF is 320hz.");
               hfcode = 0;
               lacode = ( ((data[2] & 0x1)<<3) | ( (data[1]&0xE0)>>5 ) ) << 3;
               fhi = 320.0f;
@@ -335,7 +338,7 @@ void switch_rumble_translate(const uint8_t *data)
 
       // Some kind of operation codes? Also contains frequency
       case 7:
-          //printf("Case 7\n");
+          printf("Case 7\n");
           /*
           v18 = *data;
           v19 = v18 & 1;
@@ -363,6 +366,7 @@ void switch_rumble_translate(const uint8_t *data)
         break;
 
       default:
+          printf("Unknown Case: %d\n", patternType);
           break;
   }
 

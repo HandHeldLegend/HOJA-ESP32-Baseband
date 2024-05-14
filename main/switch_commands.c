@@ -502,29 +502,48 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     //  app_save_host_mac();
     //}
 
-    app_set_connected(1);
+    
 
     uint8_t player = data[11] & 0xF;
+    uint8_t set_num = 0;
 
     switch (player)
     {
     default:
-    case 1:
-      printf("1\n");
+      set_num = 1; // Always set *something*
+      break;
+    case 0b1:
+      set_num = 1;
       break;
 
-    case 3:
-      printf("2\n");
+    case 0b11:
+      set_num = 2;
       break;
 
-    case 7:
-      printf("3\n");
+    case 0b111:
+      set_num = 3;
       break;
 
-    case 15:
-      printf("4\n");
+    case 0b1111:
+      set_num = 4;
+      break;
+
+    case 0b1001:
+      set_num = 5;
+      break;
+    case 0b1010:
+      set_num = 6;
+      break;
+
+    case 0b1011:
+      set_num = 7;
+      break;
+    case 0b0110:
+      set_num = 8;
       break;
     }
+
+    app_set_connected(set_num);
     break;
 
   default:

@@ -1,7 +1,7 @@
 #ifndef CORE_BT_SWITCH_H
 #define CORE_BT_SWITCH_H
 
-#define SWITCH_BT_REPORT_SIZE 48
+#define SWITCH_BT_REPORT_SIZE 64//48
 
 // Include any necessary includes from HOJA backend
 #include "hoja_includes.h"
@@ -9,7 +9,7 @@
 
 extern sw_input_s _switch_input_data;
 
-void switch_bt_set_cmd_data(uint8_t *data, uint16_t len);
+void ns_reset_report_spacer();
 
 void ns_controller_setinputreportmode(uint8_t report_mode);
 

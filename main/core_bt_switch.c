@@ -1,6 +1,62 @@
 #include "core_bt_switch.h"
 #include "esp_log.h"
 
+#define DEFAULT_TICK_DELAY (8/portTICK_PERIOD_MS)
+#define DEFAULT_US_DELAY (16*1000)
+static volatile bool        _hid_connected = false;
+static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
+static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
+static volatile bool        _sniff = true;
+
+interval_s _ns_interval = {0};
+
+// Utilities
+uint32_t get_timestamp_us()
+{
+    int64_t t = esp_timer_get_time();
+
+    if(t>0xFFFFFFFF) t-=0xFFFFFFFF;
+    return (uint32_t)t;
+}
+
+void ns_reset_report_spacer()
+{
+    uint32_t timestamp = get_timestamp_us();
+    interval_resettable_run(timestamp, _delay_time_us, true, &_ns_interval);
+}
+
+void ns_send_check_blocking()
+{
+    bool ok_to_send = false;
+    uint32_t timestamp = 0;
+    uint32_t fail_timer = 1000;
+    while(!ok_to_send)
+    {
+        timestamp = get_timestamp_us();
+        if(interval_run(timestamp, _delay_time_us, &_ns_interval))
+        {
+            ok_to_send = true;
+        }
+        else
+        {
+            fail_timer-=1;
+            vTaskDelay(1/portTICK_PERIOD_MS);
+        }
+
+        if(!fail_timer)
+        {
+            ns_reset_report_spacer();
+            return;
+        }
+    }
+}
+
+bool ns_send_check_nonblocking()
+{
+    uint32_t timestamp = get_timestamp_us();
+    return interval_run(timestamp, _delay_time_us, &_ns_interval);
+}
+
 /**
  * @brief NS Core Report mode enums
  */
@@ -35,7 +91,8 @@ typedef enum
 {
     NS_EVENT_HID_CHANGE,
     NS_EVENT_REPORT_MODE_CHANGE,
-    NS_EVENT_INTERVAL_CHANGE,
+    NS_EVENT_SET_SNIFF,
+    NS_EVENT_SET_AWAKE,
 } ns_event_t;
 
 typedef struct
@@ -53,8 +110,6 @@ ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
 
 sw_input_s _switch_input_data = {};
 
-volatile uint8_t _report_interval = 8;
-
 void _switch_bt_task_standard(void *parameters);
 void _switch_bt_task_empty(void *parameters);
 void _switch_bt_task_short(void *parameters);
@@ -62,6 +117,7 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type);
 
 void ns_controller_setinputreportmode(uint8_t report_mode)
 {
+    return; // Debug do nothing
     char *TAG = "ns_controller_setinputreportmode";
 
     ESP_LOGI(TAG, "Switching to input mode: %04x", report_mode);
@@ -133,35 +189,71 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
     xQueueSend(ns_event_queue, &event, 0);
 }
 
-uint16_t _hcif_report_interval = 24;
-uint16_t _hcif_report_mode = 0;
-
-void btm_hcif_mode_change_cb(uint8_t mode, uint16_t interval)
+uint32_t interval_to_ticks(uint16_t interval)
 {
-    _hcif_report_mode = mode;
-    _hcif_report_interval = interval;
+    float num = 0.625f*(float)interval;
+    uint32_t out = (uint32_t) num / portTICK_PERIOD_MS;
+    return out;
+}
 
-    // This is critical for Nintendo Switch to act upon.
-    // If power mode is 0, there should be NO packets sent from the controller until
-    // another power mode is initiated by the Nintendo Switch console.
-    ns_event_s event = {.event_id = NS_EVENT_INTERVAL_CHANGE};
+uint32_t interval_to_us(uint16_t interval)
+{
+    return (uint32_t) interval * 625;
+}
 
-    if ((!_hcif_report_interval && !_hcif_report_mode))
-    {   
-        // set interval to sniff interval
-        event.poll_interval = 0;
-        //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
+void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
+{
+    
+    if(sniff)
+    {
+        _sniff = true;
+        _delay_time_us = rx_lat*1000;//interval_to_us(rx_lat);
+        printf("Delay (ms): %d\n", rx_lat);
     }
     else
     {
-        if(_hcif_report_mode == 2)
-        {   
-            //ESP_LOGI(TAG, "Set Report Interval and non-idle: %d", _hcif_report_interval);
-            event.poll_interval = _hcif_report_interval;
-        }
+        _sniff = false;
+        _delay_time_us = 8000;
+        printf("UnSniff: \n");
+    }
+    ns_reset_report_spacer();
+}
+
+/* HCI mode defenitions */
+#define HCI_MODE_ACTIVE                 0x00
+#define HCI_MODE_HOLD                   0x01
+#define HCI_MODE_SNIFF                  0x02
+#define HCI_MODE_PARK                   0x03
+
+void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
+{
+    if (!succeeded) {
+        printf("HCI mode change event failed\n");
+        return;
     }
 
-    xQueueSend(ns_event_queue, &event, 0);
+    switch (mode) {
+        case HCI_MODE_ACTIVE:
+            printf("Connection handle 0x%04x is in ACTIVE mode.\n", hci_handle);
+            // Handle ACTIVE mode
+            _sniff = false;
+            _delay_time_us = 8000;
+            break;
+
+        case HCI_MODE_SNIFF:
+            printf("Connection handle 0x%04x is in SNIFF mode. Interval: %d ms\n", hci_handle, interval);
+            // Handle SNIFF mode
+            
+            _sniff = true;
+            _delay_time_us = interval*1000;//interval_to_us(interval);
+            break;
+
+        default:
+            printf("Connection handle 0x%04x is in an unknown mode (%d). Interval: %d slots\n", hci_handle, mode, interval);
+            break;
+    }
+    //vTaskDelay(16/portTICK_PERIOD_MS);
+    ns_reset_report_spacer();
 }
 
 // SWITCH BTC GAP Event Callback
@@ -274,7 +366,7 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         }
 
         xQueueSend(ns_event_queue, &event, 0);*/
-        ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
+        //ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
 
         break;
     }
@@ -319,7 +411,8 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->connect.status == ESP_OK)
             {
                 ns_event_s connect_event = {.event_id = NS_EVENT_HID_CHANGE, .hid_connected = true};
-                xQueueSend(ns_event_queue, &connect_event, 0);
+                _hid_connected = true;
+                //xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "CONNECT OK");
 
             }
@@ -355,8 +448,9 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->disconnect.status == ESP_OK)
             {
-                ns_event_s connect_event = {.event_id = NS_EVENT_HID_CHANGE, .hid_connected = false};
-                xQueueSend(ns_event_queue, &connect_event, 0);
+                _hid_connected = false;
+                ns_reset_report_spacer();
+                //xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "DISCONNECT OK");
             }
             else
@@ -470,17 +564,6 @@ void ns_savepairing(uint8_t *host_addr)
     // Save all settings send pairing info to RP2040
 }
 
-volatile bool _cmd_received = false;
-volatile uint8_t _cmd_data[64] = {0};
-volatile uint16_t _cmd_data_len = 0;
-
-void switch_bt_set_cmd_data(uint8_t *data, uint16_t len)
-{
-    memcpy(_cmd_data, data, sizeof(uint8_t)*len);
-    _cmd_data_len = len;
-    _cmd_received = true;
-}
-
 void _switch_bt_task_standard(void *parameters)
 {
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
@@ -491,139 +574,43 @@ void _switch_bt_task_standard(void *parameters)
         return;
     }
 
-    static bool _hid_connected = false;
-    static uint16_t _delay_time = 100;
-    static bool _idle = true;
+    
     static ns_report_mode_t _report_mode = NS_REPORT_MODE_FULL;
     static ns_event_s received_event = {0};
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
-    _delay_time = 8;
-    _idle = true;
+    _delay_time_us = DEFAULT_US_DELAY; 
+    _sniff = true;
 
     for (;;)
     {
-        while(uxQueueMessagesWaiting(ns_event_queue) > 0)
-        {
-            if(xQueueReceive(ns_event_queue, &received_event, 0))
-            {
-                switch(received_event.event_id)
-                {
-                    default:
-                        printf("Unhandled Event\n");
-                    break;
-
-                    case NS_EVENT_HID_CHANGE: // Adjust input mode
-                        _hid_connected = received_event.hid_connected;
-                        printf("HID Connected Event\n");
-                        
-                    break;
-
-                    case NS_EVENT_INTERVAL_CHANGE: // HID connected
-                        printf("Interval Event\n");
-                        if(!received_event.poll_interval)
-                        {
-                            _idle = true;
-                        }
-                        else 
-                        {
-                            _idle = false;
-                            _delay_time = received_event.poll_interval;
-                        }
-                    break;
-
-                    case NS_EVENT_REPORT_MODE_CHANGE: // HID disconnected
-                        printf("Mode Change Event\n");
-                        _report_mode = received_event.report_mode;
-                    break;
-                }
-                vTaskDelay(100/portTICK_PERIOD_MS);
-            }
-        }
-
         static uint8_t _full_buffer[64] = {0};
-        uint8_t tmp[49] = {0x00, 0x00};
+        uint8_t tmp[64] = {0x00, 0x00};
 
-        if( (_hid_connected))
+        if(_hid_connected)
         {
-            if(_cmd_received)
+            if(ns_send_check_nonblocking())
             {
-                _cmd_received = false;
-                //switch_rumble_translate(&_cmd_data[1]);
-                ns_subcommand_handler(_cmd_data[9], _cmd_data, _cmd_data_len);
-            }
-            else if(!_idle)
-            {
-                if(_report_mode == NS_REPORT_MODE_FULL)
+                if((_report_mode == NS_REPORT_MODE_FULL))
                 {
                     ns_report_clear(_full_buffer, 64);
                     ns_report_setinputreport_full(_full_buffer, &_switch_input_data);
-
                     ns_report_settimer(_full_buffer);
                     ns_report_setbattconn(_full_buffer);
                     //_full_buffer[12] = 0x70;
-
-                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
-                    vTaskDelay(_delay_time/portTICK_PERIOD_MS);
+                    if(_hid_connected)
+                        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
                 }
                 else
                 {
                     esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
-                    vTaskDelay(24/portTICK_PERIOD_MS);
                 }
             }
-            else
-            {
-                vTaskDelay(24/portTICK_PERIOD_MS);
-            }
         }
         else
         {
-            vTaskDelay(24/portTICK_PERIOD_MS);
-        }
-    }
-}
-
-// Task used to send short or simple inputs.
-// Only sends input when data is changed! SOOPER.
-void _switch_bt_task_short(void *parameters)
-{
-    const char *TAG = "_switch_bt_task_short";
-    ESP_LOGI(TAG, "Sending short (0x3F) reports on core %d\n", xPortGetCoreID());
-
-    for (;;)
-    {
-        vTaskDelay(16 / portTICK_PERIOD_MS);
-
-        static uint8_t _short_buffer[64] = {0};
-
-        ns_report_clear(_short_buffer, 64);
-
-        _ns_report_setinputreport_short(_short_buffer, &_switch_input_data);
-
-        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x3F, 12, _short_buffer);
-    }
-}
-
-void _switch_bt_task_empty(void *parameters)
-{
-    const char *TAG = "ns_report_task_sendempty";
-    ESP_LOGI(TAG, "Sending empty reports on core %d\n", xPortGetCoreID());
-    uint8_t tmp[49] = {0x00, 0x00};
-
-    for (;;)
-    {
-        vTaskDelay(350 / portTICK_PERIOD_MS);
-        if(_cmd_received)
-        {
-            _cmd_received = false;
-            //switch_rumble_translate(&_cmd_data[1]);
-            ns_subcommand_handler(_cmd_data[9], _cmd_data, _cmd_data_len);
-        }
-        else
-        {
-            esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
+            vTaskDelay(16/portTICK_PERIOD_MS);
         }
     }
 }

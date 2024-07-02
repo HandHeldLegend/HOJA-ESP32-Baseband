@@ -3,6 +3,9 @@
 
 #include "hoja_includes.h"
 
+// reboot the gamepad Bluetooth with the same mode
+void app_running_reboot();
+
 imu_data_s* imu_fifo_last();
 void imu_fifo_push(imu_data_s *imu_data);
 void app_set_connected(uint8_t connected);

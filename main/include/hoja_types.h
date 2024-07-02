@@ -4,6 +4,12 @@
 #include "stdint.h"
 #include "stdbool.h"
 
+typedef struct 
+{
+  uint32_t this_time;
+  uint32_t last_time;
+} interval_s;
+
 // IMU data structure
 typedef struct
 {

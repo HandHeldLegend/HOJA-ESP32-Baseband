@@ -203,7 +203,8 @@ uint32_t interval_to_us(uint16_t interval)
 
 void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
 {
-    
+    // Ignore all of this for debug
+    return;
     if(sniff)
     {
         _sniff = true;
@@ -568,15 +569,7 @@ void _switch_bt_task_standard(void *parameters)
 {
     ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
 
-    ns_event_queue = xQueueCreate(10, sizeof(ns_event_s));
-    if (ns_event_queue == NULL) {
-        printf("Failed to create event queue\n");
-        return;
-    }
-
-    
     static ns_report_mode_t _report_mode = NS_REPORT_MODE_FULL;
-    static ns_event_s received_event = {0};
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;

@@ -40,3 +40,5 @@ build/x509_crt_bundle.S
 build/flash_args
 
 build/flash_args.in
+
+build/log/

@@ -20,6 +20,15 @@
 #define I2C_SLAVE_RX_BUF_LEN (2 * DATA_LENGTH) /*!< I2C slave rx buffer size */
 #define ESP_SLAVE_ADDR 0x76                    /*!< ESP32 slave address, you can set any 7bit value */
 
+// Utilities
+uint32_t get_timestamp_us()
+{
+    int64_t t = esp_timer_get_time();
+
+    if(t>0xFFFFFFFF) t-=0xFFFFFFFF;
+    return (uint32_t)t;
+}
+
 typedef void (*bluetooth_input_cb_t)(i2cinput_input_s *);
 
 i2cinput_status_s _bluetooth_status = {0};

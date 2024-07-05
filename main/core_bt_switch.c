@@ -10,15 +10,6 @@ static volatile bool        _sniff = true;
 
 interval_s _ns_interval = {0};
 
-// Utilities
-uint32_t get_timestamp_us()
-{
-    int64_t t = esp_timer_get_time();
-
-    if(t>0xFFFFFFFF) t-=0xFFFFFFFF;
-    return (uint32_t)t;
-}
-
 void ns_reset_report_spacer()
 {
     uint32_t timestamp = get_timestamp_us();

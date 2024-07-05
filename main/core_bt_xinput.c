@@ -350,10 +350,15 @@ void _xinput_bt_input_task(void * params)
 
         if(connected && gap_auth)
         {
-            memcpy(xi_buffer, &xi_input, XI_HID_LEN);
-            esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
+            static interval_s xi_interval = {0};
+            uint32_t timestamp = get_timestamp_us();
+
+            if(interval_run(timestamp, 2000, &xi_interval))
+            {
+                memcpy(xi_buffer, &xi_input, XI_HID_LEN);
+                esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
+            }
         }
-        vTaskDelay(2/portTICK_PERIOD_MS);
     }
 }
 

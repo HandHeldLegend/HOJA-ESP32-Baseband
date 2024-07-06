@@ -452,6 +452,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
   case SW_CMD_SET_HCI:
     // For now all options should shut down
     printf("Set HCI %X\n", data[10]);
+    switch_bt_end_task();
     app_send_command(I2CINPUT_ID_SHUTDOWN, 0x00);
     break;
 

@@ -1,7 +1,7 @@
 #ifndef HOJA_INCLUDES_H
 #define HOJA_INCLUDES_H
 
-#define HOJA_BASEBAND_VERSION 0xA00C
+#define HOJA_BASEBAND_VERSION 0xA00D
 #include "hoja_types.h"
 #include <string.h>
 #include <inttypes.h>

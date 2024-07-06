@@ -9,6 +9,7 @@
 
 extern sw_input_s _switch_input_data;
 
+void switch_bt_end_task();
 void ns_reset_report_spacer();
 
 void ns_controller_setinputreportmode(uint8_t report_mode);

@@ -106,6 +106,14 @@ void _switch_bt_task_empty(void *parameters);
 void _switch_bt_task_short(void *parameters);
 void ns_controller_input_task_set(ns_report_mode_t report_mode_type);
 
+void switch_bt_end_task()
+{
+    if(_switch_bt_task_handle != NULL)
+    {
+        vTaskDelete(_switch_bt_task_handle);
+    }
+}
+
 void ns_controller_setinputreportmode(uint8_t report_mode)
 {
     return; // Debug do nothing

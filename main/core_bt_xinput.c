@@ -6,9 +6,16 @@ QueueHandle_t _xinput_event_queue;
 
 void _xinput_bt_input_task(void * params);
 
+typedef enum
+{
+    XINPUT_EVT_HID_CONNECT,
+    XINPUT_EVT_HID_DISCONNECT,
+    XINPUT_EVT_GAP_AUTH,
+} xinput_event_t;
+
 typedef struct
 {
-    int event;
+    xinput_event_t event;
     bool hid_connected;
     bool gap_auth;
 } xinput_event_s;
@@ -35,7 +42,7 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     case ESP_HIDD_CONNECT_EVENT:
     {
         ESP_LOGI(TAG, "CONNECT");
-        xinput_event_s connect_event = {.event = 0, .hid_connected = true};
+        xinput_event_s connect_event = {.event = XINPUT_EVT_HID_CONNECT, .hid_connected = true};
         xQueueSend(_xinput_event_queue, &connect_event, 0);
         app_set_connected(1);
         break;
@@ -94,14 +101,16 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     }
     case ESP_HIDD_STOP_EVENT:
     {
-        xinput_event_s connect_event = {.event = 1, .gap_auth = false};
-        xQueueSend(_xinput_event_queue, &connect_event, 0);
-        vTaskDelay(8/portTICK_PERIOD_MS);
         if (_xinput_task_handler != NULL)
         {
             vTaskDelete(_xinput_task_handler);
             _xinput_task_handler = NULL;
         }
+
+        xinput_event_s connect_event = {.event = 1, .gap_auth = false};
+        xQueueSend(_xinput_event_queue, &connect_event, 0);
+
+        
         ESP_LOGI(TAG, "STOP");
         break;
     }
@@ -174,7 +183,7 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         else
         {
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
-            xinput_event_s connect_event = {.event = 1, .gap_auth = true};
+            xinput_event_s connect_event = {.event = XINPUT_EVT_GAP_AUTH, .gap_auth = true};
             xQueueSend(_xinput_event_queue, &connect_event, 0);
             app_set_connected(1);
         }
@@ -338,27 +347,30 @@ void _xinput_bt_input_task(void * params)
 
     for(;;)
     {
-        if(xQueueReceive(_xinput_event_queue, &received_event, 0))
+        while(xQueueReceive(_xinput_event_queue, &received_event, 0) == pdTRUE)
         {
-            if(!received_event.event)
-                connected = received_event.hid_connected;
-            else
+            switch(received_event.event)
             {
-                gap_auth = received_event.gap_auth;
+                case XINPUT_EVT_GAP_AUTH:
+                gap_auth = true;
+                break;
+
+                case XINPUT_EVT_HID_CONNECT:
+                connected = true;
+                break;
+
+                case XINPUT_EVT_HID_DISCONNECT:
+                connected = false;
+                break;
             }
         }
 
         if(connected && gap_auth)
         {
-            static interval_s xi_interval = {0};
-            uint32_t timestamp = get_timestamp_us();
-
-            if(interval_run(timestamp, 2000, &xi_interval))
-            {
-                memcpy(xi_buffer, &xi_input, XI_HID_LEN);
-                esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
-            }
+            memcpy(xi_buffer, &xi_input, XI_HID_LEN);
+            esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
         }
+        vTaskDelay(4/portTICK_PERIOD_MS);
     }
 }
 

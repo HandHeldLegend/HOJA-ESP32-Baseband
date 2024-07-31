@@ -6,100 +6,475 @@
 
 #include "hoja_includes.h"
 
-#define _I2C_NUMBER(num) I2C_NUM_##num
-#define I2C_NUMBER(num) _I2C_NUMBER(num)
+#define I2C_RX_BUFFER_SIZE 24 // Size of the input, plus a byte for ID
+#define I2C_TX_BUFFER_SIZE 24
 
-#define DATA_LENGTH 64 /*!< Data buffer length of test buffer */
-#define HOJA_I2C_MSG_SIZE_IN 32
-#define HOJA_I2C_MSG_SIZE_OUT 11+1
+#define I2C_MSG_STATUS_IDX 4
+#define I2C_MSG_DATA_START 5
+#define I2C_MSG_CMD_IDX 3
 
 #define I2C_SLAVE_SCL_IO 20                    /*!< gpio number for i2c slave clock */
 #define I2C_SLAVE_SDA_IO 19                    /*!< gpio number for i2c slave data */
-#define I2C_SLAVE_NUM I2C_NUMBER(0)            /*!< I2C port number for slave dev */
-#define I2C_SLAVE_TX_BUF_LEN (2 * DATA_LENGTH) /*!< I2C slave tx buffer size */
-#define I2C_SLAVE_RX_BUF_LEN (2 * DATA_LENGTH) /*!< I2C slave rx buffer size */
-#define ESP_SLAVE_ADDR 0x76                    /*!< ESP32 slave address, you can set any 7bit value */
+#define I2C_SLAVE_NUM I2C_NUM_0                /*!< I2C port number for slave dev */
+#define ESP_SLAVE_ADDR 0x76
+
+typedef struct
+{
+    uint8_t data[I2C_RX_BUFFER_SIZE];
+} packed_i2c_msg;
 
 // Utilities
 uint32_t get_timestamp_us()
 {
     int64_t t = esp_timer_get_time();
 
-    if(t>0xFFFFFFFF) t-=0xFFFFFFFF;
+    if (t > 0xFFFFFFFF)
+        t -= 0xFFFFFFFF;
     return (uint32_t)t;
+}
+
+uint8_t _i2c_buffer_in[I2C_RX_BUFFER_SIZE];
+uint8_t _i2c_buffer_out[I2C_TX_BUFFER_SIZE];
+
+static volatile uint8_t _connected_number = 0;
+QueueHandle_t main_receive_queue;
+
+// Polynomial for CRC-8 (x^8 + x^2 + x + 1)
+#define CRC8_POLYNOMIAL 0x07
+
+uint8_t crc8_compute(uint8_t *data, size_t length)
+{
+    uint8_t crc = 0x00; // Initial value of CRC
+    for (size_t i = 0; i < length; i++)
+    {
+        crc ^= data[i]; // XOR the next byte into the CRC
+
+        for (uint8_t j = 0; j < 8; j++)
+        {
+            if (crc & 0x80)
+            { // If the MSB is set
+                crc = (crc << 1) ^ CRC8_POLYNOMIAL;
+            }
+            else
+            {
+                crc <<= 1;
+            }
+        }
+    }
+
+    if (!crc)
+        crc++; // Must be non-zero
+
+    return crc;
+}
+
+bool crc8_verify(uint8_t *data, size_t length, uint8_t received_crc)
+{
+    uint8_t calculated_crc = crc8_compute(data, length);
+    return calculated_crc == received_crc;
 }
 
 typedef void (*bluetooth_input_cb_t)(i2cinput_input_s *);
 
-i2cinput_status_s _bluetooth_status = {0};
-
+// Input callback pointer
 bluetooth_input_cb_t _bluetooth_input_cb = NULL;
 
+// Our loaded configuration data
 hoja_settings_s global_loaded_settings = {0};
 
-bool     _msg_override = false;
-uint8_t  _msg_override_data[HOJA_I2C_MSG_SIZE_OUT]  = {0};
+// Our buffer for outgoing i2cinput messages
+#define I2C_STATUS_BUFFER_SIZE 32
+uint8_t _i2c_status_buffer[I2C_STATUS_BUFFER_SIZE][I2C_TX_BUFFER_SIZE];
 
-bool _i2c_read_msg(uint8_t *buffer)
+typedef struct
 {
-    uint8_t idx = 0;
-    static bool d = false;
-    static bool e = false;
-    static bool f = false;
+    size_t size;
+    size_t head;
+    size_t tail;
+    size_t count;
+} RingBuffer;
 
-    uint8_t pattern = 0x00;
-    bool got = false;
+RingBuffer _status_ringbuffer = {.size = I2C_STATUS_BUFFER_SIZE};
 
-    while(idx<HOJA_I2C_MSG_SIZE_IN)
+// Add data to the ring buffer
+bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
+{
+    //xSemaphoreTake(mutex_handle, portMAX_DELAY);
+
+    if (rb->count == rb->size)
     {
-        if(i2c_slave_read_buffer(I2C_SLAVE_NUM, &buffer[idx], 1, portMAX_DELAY)>0)
+        // Buffer is full
+        //xSemaphoreGive(mutex_handle);
+        printf("F\n");
+        return false;
+    }
+
+    memcpy(&(_i2c_status_buffer[rb->head]), data, I2C_TX_BUFFER_SIZE);
+    rb->head = (rb->head + 1) % rb->size;
+    rb->count++;
+    //xSemaphoreGive(mutex_handle);
+    return true;
+}
+
+// Get data from the ring buffer
+uint8_t *ringbuffer_get(RingBuffer *rb)
+{
+    //xSemaphoreTake(mutex_handle, portMAX_DELAY);
+    if (rb->count == 0)
+    {
+        // Buffer is empty
+        //xSemaphoreGive(mutex_handle);
+        return NULL;
+    }
+    uint8_t *data = _i2c_status_buffer[rb->tail];
+    rb->tail = (rb->tail + 1) % rb->size;
+    rb->count--;
+    //xSemaphoreGive(mutex_handle);
+    return data;
+}
+
+// Loads messages into our cross-core buffer
+void ringbuffer_load_threadsafe(uint8_t *data)
+{
+    static packed_i2c_msg msg = {0};
+    memcpy(&(msg.data[0]), data, I2C_TX_BUFFER_SIZE);
+    xQueueSend(main_receive_queue, &msg, 0);
+}
+
+// Obtain messages from our cross-core buffer
+void ringbuffer_unload_threadsafe()
+{
+    static packed_i2c_msg msg = {0};
+    while(xQueueReceive(main_receive_queue, &msg, 0) == pdTRUE)
+    {
+        ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
+    }
+}
+
+// Only call from core 1
+void app_set_connected_status(uint8_t status)
+{
+    uint8_t conn_buffer[I2C_TX_BUFFER_SIZE] = {0};
+    i2cinput_status_s conn_status = {
+        .cmd = I2C_STATUS_CONNECTED_STATUS,
+    };
+
+    conn_status.data[0] = status;
+    conn_status.rand_seed = esp_random();
+
+    memcpy(&(conn_buffer[1]), &conn_status, sizeof(i2cinput_status_s));
+
+    uint8_t crc = crc8_compute((uint8_t *) &conn_status, sizeof(i2cinput_status_s));
+    conn_buffer[0] = crc;
+
+    ringbuffer_load_threadsafe(conn_buffer);
+}
+
+bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
+{
+    ESP_LOGI("app_compare_mac", "Mac 1:");
+    esp_log_buffer_hex("Switch HOST: ", mac_1, 6);
+    esp_log_buffer_hex("Saved HOST: ", mac_2, 6);
+
+    for (uint8_t i = 0; i < 6; i++)
+    {
+        if (mac_1[i] != mac_2[i])
         {
-            if(buffer[idx] == 0xDD)
-            {
-                pattern += 1;
-            }
-            else if( (buffer[idx] == 0xEE) && (pattern == 1) )
-            {
-                pattern += 1;
-            }
-            else if( (buffer[idx] == 0xAA) && (pattern == 2) ) // If we get here we reset our index to re-align
-            {
-                idx = 2;
-                pattern = 0;
-                got = true;
-            }
+            return false;
         }
-        idx++;
     }
-
-    i2c_reset_rx_fifo(I2C_SLAVE_NUM);
-
-    return got;
+    return true;
 }
 
-void _i2c_write_status_msg()
+// Only call from core 1
+void app_set_power_setting(uint8_t power)
 {
-    if(_msg_override)
+    uint8_t power_buffer[I2C_TX_BUFFER_SIZE] = {0};
+    i2cinput_status_s power_status = {
+        .cmd = I2C_STATUS_POWER_CODE,
+    };
+
+    power_status.data[0] = power;
+    power_status.rand_seed = esp_random();
+
+    memcpy(&(power_buffer[1]), &power_status, sizeof(i2cinput_status_s));
+
+    uint8_t crc = crc8_compute((uint8_t *) &power_status, sizeof(i2cinput_status_s));
+    power_buffer[0] = crc;
+
+    ringbuffer_load_threadsafe(power_buffer);
+    //ringbuffer_set(&_status_ringbuffer, power_buffer);
+}
+
+// Only call from core 1
+void app_set_switch_haptic(uint8_t *data)
+{
+    uint8_t haptic_buffer[I2C_TX_BUFFER_SIZE] = {0};
+    i2cinput_status_s haptic_status = {
+        .cmd = I2C_STATUS_HAPTIC_SWITCH,
+    };
+
+    // Copy haptic data into status
+    memcpy(&(haptic_status.data), data, 8);
+    // Generate random seed
+    haptic_status.rand_seed = esp_random();
+
+    // Copy haptic_status into haptic_buffer
+    memcpy(&(haptic_buffer[1]), &haptic_status, sizeof(i2cinput_status_s));
+
+    // Set the CRC at byte 0 of our outgoing data
+    uint8_t crc = crc8_compute((uint8_t *)&haptic_status, sizeof(i2cinput_status_s));
+    haptic_buffer[0] = crc;
+
+    ringbuffer_load_threadsafe(haptic_buffer);
+    //ringbuffer_set(&_status_ringbuffer, haptic_buffer);
+}
+
+void app_set_standard_haptic(uint8_t left, uint8_t right)
+{
+    uint8_t haptic_buffer[I2C_TX_BUFFER_SIZE] = {0};
+    i2cinput_status_s haptic_status = {
+        .cmd = I2C_STATUS_HAPTIC_STANDARD,
+    };
+
+    // Copy haptic data into status
+    haptic_status.data[0] = left;
+    haptic_status.data[1] = right;
+    // Generate random seed
+    haptic_status.rand_seed = esp_random();
+
+    // Copy haptic_status into haptic_buffer
+    memcpy(&(haptic_buffer[1]), &haptic_status, sizeof(i2cinput_status_s));
+
+    // Set the CRC at byte 0 of our outgoing data
+    uint8_t crc = crc8_compute((uint8_t *)&haptic_status, sizeof(i2cinput_status_s));
+    haptic_buffer[0] = crc;
+
+    ringbuffer_load_threadsafe(haptic_buffer);
+}
+
+// Send updated host MAC address so the host device can save it for later
+void app_save_host_mac()
+{
+    ESP_LOGI("app_save_host_mac", "Saving new host mac...");
+    uint8_t mac_buffer[I2C_TX_BUFFER_SIZE] = {0};
+
+    i2cinput_status_s mac_status = {
+        .cmd = I2C_STATUS_MAC_UPDATE,
+    };
+
+    mac_status.data[0] = global_loaded_settings.switch_host_mac[0];
+    mac_status.data[1] = global_loaded_settings.switch_host_mac[1];
+    mac_status.data[2] = global_loaded_settings.switch_host_mac[2];
+    mac_status.data[3] = global_loaded_settings.switch_host_mac[3];
+    mac_status.data[4] = global_loaded_settings.switch_host_mac[4];
+    mac_status.data[5] = global_loaded_settings.switch_host_mac[5];
+
+    // Generate random seed
+    mac_status.rand_seed = esp_random();
+
+    // Copy haptic_status into haptic_buffer
+    memcpy(&(mac_buffer[1]), &mac_status, sizeof(i2cinput_status_s));
+
+    uint8_t crc = crc8_compute((uint8_t *)&mac_status, sizeof(i2cinput_status_s));
+    mac_buffer[0] = crc;
+
+    ringbuffer_set(&_status_ringbuffer, mac_buffer);
+    memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
+}
+
+uint8_t _current_rx_crc = 0;
+// Handle incoming input data
+// and call our input callback
+void bt_device_input(uint8_t* data, bool motion)
+{
+    static i2cinput_input_s input_data = {0};
+    static i2cinput_motion_s motion_data = {0};
+    static imu_data_s _new_imu = {0};
+
+    uint8_t crc = data[1];
+    bool crc_valid = false;
+
+    if(motion)
     {
-        ESP_LOGI("_i2c_write_status_msg", "Sending override message.");
-        //i2c_reset_tx_fifo(I2C_SLAVE_NUM);
-        if(i2c_slave_write_buffer(I2C_SLAVE_NUM, _msg_override_data, HOJA_I2C_MSG_SIZE_OUT, portMAX_DELAY))
-        _msg_override = false;
+        crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_motion_s), crc);
+        if(!crc_valid) return;
+
+        _current_rx_crc = data[2];
+
+        memcpy(&motion_data, &(data[3]), sizeof(i2cinput_motion_s));
+        _new_imu.ax = motion_data.ax;
+        _new_imu.ay = motion_data.ay;
+        _new_imu.az = motion_data.az;
+        _new_imu.gx = motion_data.gx;
+        _new_imu.gy = motion_data.gy;
+        _new_imu.gz = motion_data.gz;
+        imu_fifo_push(&_new_imu);
     }
-    else 
+    else
     {
-        uint8_t _msg_out[HOJA_I2C_MSG_SIZE_OUT] = {0};
-        _msg_out[0] = I2CINPUT_ID_STATUS;
+        crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_input_s), crc);
+        if(!crc_valid) return;
 
-        memcpy(&(_msg_out[1]), &(_bluetooth_status), 11);
+        _current_rx_crc = data[2];
 
-        //i2c_reset_tx_fifo(I2C_SLAVE_NUM);
-        i2c_slave_write_buffer(I2C_SLAVE_NUM, _msg_out, HOJA_I2C_MSG_SIZE_OUT, portMAX_DELAY);
+        memcpy(&input_data, &(data[3]), sizeof(i2cinput_input_s));
+
+        if (!_bluetooth_input_cb)
+        return;
+
+        _bluetooth_input_cb(&input_data);
+    } 
+}
+
+void i2c_handle_new_tx()
+{
+    static uint8_t *rb_buffer = NULL;
+    static bool first = false;
+
+    // If our ringbuffer is null
+    if (rb_buffer == NULL)
+    {
+        // Try to get the next buffer in line
+        rb_buffer = ringbuffer_get(&_status_ringbuffer);
+    }
+    // For this else statement, we already have sent a ringbuffer message
+    // We will need to confirm the CRC before pulling the next ringbuffer message
+    else
+    {
+        if (_current_rx_crc == rb_buffer[0]) // This confirms it's okay to load the next ringbuffer status
+        {
+            rb_buffer = ringbuffer_get(&_status_ringbuffer);
+        }
+    }
+
+    // Send nothing if we have nothing to send
+    if (rb_buffer == NULL)
+    {
+       return;
+    }
+    else // Transmit ringbuffer data
+    {
+        memcpy(_i2c_buffer_out, rb_buffer, I2C_TX_BUFFER_SIZE);
+        mi2c_slave_polling_write(_i2c_buffer_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(8));
     }
 }
 
-static esp_err_t i2c_slave_init(void)
+// Handle startup of bluetooth device
+void bt_device_start(uint8_t *data)
 {
+    esp_log_buffer_hex("DUMP", data, 8);
+    const char *TAG = "BT DEVICE START";
+    
+    uint8_t crc = data[1];
+
+    bool crc_pass = crc8_verify(&(data[2]), 13, crc);
+    if(!crc_pass)
+    {
+        printf("CRC Startup FAIL\n");
+        return;
+    }
+
+    input_mode_t mode = data[2];
+
+    global_loaded_settings.device_mac[0] = data[3];
+    global_loaded_settings.device_mac[1] = data[4];
+    global_loaded_settings.device_mac[2] = data[5];
+
+    global_loaded_settings.device_mac[3] = data[6];
+    global_loaded_settings.device_mac[4] = data[7];
+    global_loaded_settings.device_mac[5] = data[8];
+
+    // Load paired mac
+    global_loaded_settings.paired_host_mac[0] = data[9];
+    global_loaded_settings.paired_host_mac[1] = data[10];
+    global_loaded_settings.paired_host_mac[2] = data[11];
+
+    global_loaded_settings.paired_host_mac[3] = data[12];
+    global_loaded_settings.paired_host_mac[4] = data[13];
+    global_loaded_settings.paired_host_mac[5] = data[14];
+
+    esp_log_buffer_hex(TAG, global_loaded_settings.paired_host_mac, 6);
+
+    switch (mode)
+    {
+    default:
+        break;
+
+    case INPUT_MODE_DS4:
+        break; // Disable for now
+        _bluetooth_input_cb = ds4_bt_sendinput;
+        ESP_LOGI(TAG, "DS4 BT Mode Init...");
+
+        core_bt_ds4_start();
+        break;
+
+    case INPUT_MODE_SWPRO:
+        _bluetooth_input_cb = switch_bt_sendinput;
+        ESP_LOGI(TAG, "Switch BT Mode Init...");
+
+        core_bt_switch_start();
+        break;
+
+    case INPUT_MODE_XINPUT:
+        _bluetooth_input_cb = xinput_bt_sendinput;
+        ESP_LOGI(TAG, "XInput BT Mode Init...");
+        core_bt_xinput_start();
+        break;
+    }
+}
+
+// Return current FW version
+void bt_device_return_fw_version()
+{
+    i2cinput_status_s firmware_status = {
+        .cmd = I2C_STATUS_FIRMWARE_VERSION,
+    };
+
+    firmware_status.data[0] = HOJA_BASEBAND_VERSION >> 8;
+    firmware_status.data[1] = HOJA_BASEBAND_VERSION & 0xFF;
+
+    // Generate random seed
+    //firmware_status.rand_seed = 0;
+    //firmware_status.crc = 0;
+
+    // Instant transmit
+    //mi2c_slave_polling_write((uint8_t *)&firmware_status, sizeof(i2cinput_status_s), pdMS_TO_TICKS(1000));
+}
+
+volatile uint32_t _timer = 0;
+volatile bool _timer_owned = false;
+uint32_t get_timer_value()
+{
+    static uint32_t safe_value = 0;
+    if (_timer_owned)
+        return safe_value;
+    else
+    {
+        _timer_owned = true;
+        safe_value = _timer;
+        _timer_owned = false;
+    }
+    return safe_value;
+}
+
+void update_timer_value()
+{
+    if (_timer_owned)
+        return;
+    else
+    {
+        _timer_owned = true;
+        _timer = get_timestamp_us();
+        _timer_owned = false;
+    }
+}
+
+/**
+int legacy_i2c_setup()
+{
+    //!< ESP32 slave address, you can set any 7bit value
+
     int i2c_slave_port = I2C_SLAVE_NUM;
     i2c_config_t conf_slave = {
         .sda_io_num = I2C_SLAVE_SDA_IO,
@@ -117,88 +492,19 @@ static esp_err_t i2c_slave_init(void)
         return err;
     }
     return i2c_driver_install(i2c_slave_port, conf_slave.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
-}
-
-bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
-{
-    ESP_LOGI("app_compare_mac", "Mac 1:");
-    esp_log_buffer_hex("Switch HOST: ", mac_1, 6);
-    esp_log_buffer_hex("Saved HOST: ", mac_2, 6);
-    
-    for(uint8_t i = 0; i < 6; i++)
-    {
-        if (mac_1[i] != mac_2[i])
-        {
-            return false;
-        }
-    }
-    return true;
-}
-
-void app_set_rumble(float frequency_hi, uint8_t amplitude_hi, float frequency_lo, uint8_t amplitude_lo)
-{
-    _bluetooth_status.rumble_frequency_hi = frequency_hi;
-    _bluetooth_status.rumble_amplitude_hi = amplitude_hi;
-    _bluetooth_status.rumble_frequency_lo = frequency_lo;
-    _bluetooth_status.rumble_amplitude_lo = amplitude_lo;
-}
-
-void app_set_connected(uint8_t connected)
-{
-    _bluetooth_status.connected_status = connected;
-}
-
-void app_send_command(uint8_t cmd, uint8_t msg)
-{
-    _msg_override_data[0] = cmd;
-    _msg_override_data[1] = msg;
-    _msg_override = true;
-}
-
-void app_save_host_mac()
-{
-    ESP_LOGI("app_save_host_mac", "Saving new host MAC.");
-
-    _msg_override_data[0] = I2CINPUT_ID_SAVEMAC;
-    _msg_override_data[1] = global_loaded_settings.switch_host_mac[0];
-    _msg_override_data[2] = global_loaded_settings.switch_host_mac[1];
-    _msg_override_data[3] = global_loaded_settings.switch_host_mac[2];
-    _msg_override_data[4] = global_loaded_settings.switch_host_mac[3];
-    _msg_override_data[5] = global_loaded_settings.switch_host_mac[4];
-    _msg_override_data[6] = global_loaded_settings.switch_host_mac[5];
-    _msg_override = true;
-
-    memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
-}
-
-void app_input(i2cinput_input_s *input)
-{
-    static imu_data_s _new_imu = {0};
-
-    _new_imu.ax = input->ax;
-    _new_imu.ay = input->ay;
-    _new_imu.az = input->az;
-
-    _new_imu.gx = input->gx;
-    _new_imu.gy = input->gy;
-    _new_imu.gz = input->gz;
-
-    imu_fifo_push(&_new_imu);
-
-    if (!_bluetooth_input_cb)
-        return;
-
-    _bluetooth_input_cb(input);
-}
-
-i2cinput_input_s input = {0};
+}**/
 
 void app_main(void)
 {
+    esp_task_wdt_deinit();
+
     const char *TAG = "app_main";
     esp_err_t ret;
 
     ESP_LOGI(TAG, "Bluetooth FW starting...");
+
+    // Create mutex
+    main_receive_queue = xQueueCreate(32, sizeof(packed_i2c_msg));
 
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
@@ -208,106 +514,53 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
-    ESP_ERROR_CHECK(i2c_slave_init());
+    mi2c_slave_setup();
+    //legacy_i2c_setup();
 
-    static uint8_t data[HOJA_I2C_MSG_SIZE_IN]      = {0xFF, 0xFF, 0xFF};
-    
-
+    // Main I2C loop
     for (;;)
-    {
-        
-        vTaskDelay(1 / portTICK_PERIOD_MS);
-        // size_t d_size = i2c_slave_write_buffer(I2C_SLAVE_NUM, data, 3, 1000 / portTICK_PERIOD_MS);
+    {   
+        ringbuffer_unload_threadsafe();
 
-        if (_i2c_read_msg(data))
+        mi2c_status_t read_status = mi2c_slave_polling_read(_i2c_buffer_in, I2C_RX_BUFFER_SIZE, 8);
+
+        if (read_status == MI2C_OK)
         {
-            switch (data[3])
+            // Check command type
+            switch (_i2c_buffer_in[0])
             {
-                default:
-                    ESP_LOGI(TAG, "WRONG CODE");
-                    memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
-                    break;
-
-                // Initialize bluetooth
-                case I2CINPUT_ID_INIT:
-                {
-
-                    input_mode_t mode = data[4];
-
-                    global_loaded_settings.device_mac[0] = data[5];
-                    global_loaded_settings.device_mac[1] = data[6];
-                    global_loaded_settings.device_mac[2] = data[7];
-
-                    global_loaded_settings.device_mac[3] = data[8];
-                    global_loaded_settings.device_mac[4] = data[9];
-                    global_loaded_settings.device_mac[5] = data[10];
-
-                    // Load paired mac
-                    global_loaded_settings.paired_host_mac[0] = data[11];
-                    global_loaded_settings.paired_host_mac[1] = data[12];
-                    global_loaded_settings.paired_host_mac[2] = data[13];
-
-                    global_loaded_settings.paired_host_mac[3] = data[14];
-                    global_loaded_settings.paired_host_mac[4] = data[15];
-                    global_loaded_settings.paired_host_mac[5] = data[16];
-
-                    esp_log_buffer_hex(TAG, global_loaded_settings.paired_host_mac, 6);
-
-                    switch (mode)
-                    {
-                        default:
-                            break;
-
-                        case INPUT_MODE_DS4:
-                            _bluetooth_input_cb = ds4_bt_sendinput;
-                            ESP_LOGI(TAG, "DS4 BT Mode Init...");
-                            memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
-                            core_bt_ds4_start();
-                            break;
-
-                        case INPUT_MODE_SWPRO:
-                            _bluetooth_input_cb = switch_bt_sendinput;
-                            ESP_LOGI(TAG, "Switch BT Mode Init...");
-                            memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
-                            core_bt_switch_start();
-                            break;
-
-                        case INPUT_MODE_XINPUT:
-                            _bluetooth_input_cb = xinput_bt_sendinput;
-                            ESP_LOGI(TAG, "XInput BT Mode Init...");
-                            memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
-                            core_bt_xinput_start();
-                            break;
-                    }
-                }
+            default:
+                ESP_LOGI(TAG, "Unknown RX");
                 break;
 
-                case I2CINPUT_ID_INPUT:
-                {
-                    memcpy(&input, &(data[4]), sizeof(i2cinput_input_s));
-                    app_input(&input);
-                    memset(data, 0, HOJA_I2C_MSG_SIZE_IN);
-                    // Write our response data
-                    _i2c_write_status_msg();
-                }
+            case I2C_CMD_STANDARD:
+                // ESP_LOGI(TAG, "Input RX");
+                bt_device_input(_i2c_buffer_in, false);
+                // Transmit
+                i2c_handle_new_tx();
+                break;
+            
+            case I2C_CMD_MOTION:
+                // ESP_LOGI(TAG, "Input RX");
+                bt_device_input(_i2c_buffer_in, true);
+                // Transmit
+                i2c_handle_new_tx();
                 break;
 
-                case I2CINPUT_ID_GETVERSION:
-                {
-                    _msg_override_data[0] = I2CINPUT_ID_GETVERSION;
-                    _msg_override_data[1] = HOJA_BASEBAND_VERSION >> 8;
-                    _msg_override_data[2] = HOJA_BASEBAND_VERSION & 0xFF;
-                    _msg_override = true;
-
-                    // Write our response data
-                    _i2c_write_status_msg();
-                }
-                break;
-
+            case I2C_CMD_START:
+                ESP_LOGI(TAG, "Start System RX");
                 
-            }
+                bt_device_start(_i2c_buffer_in);
+                // We do not transmit anything with this command
+                break;
 
+            case I2C_CMD_FIRMWARE_VERSION:
+                ESP_LOGI(TAG, "Firmware Version Request RX");
+                // bt_device_return_fw_version();
+                break;
+            }
             
         }
+        vTaskDelay(1/portTICK_PERIOD_MS);
     }
 }

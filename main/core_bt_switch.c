@@ -300,7 +300,7 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             _switch_bt_task_handle = NULL;
         }
 
-        app_set_connected(0);
+        app_set_connected_status(0);
         
         if(util_bt_get_paired())
         {

@@ -35,6 +35,8 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
         xTaskCreatePinnedToCore(_xinput_bt_input_task, 
                                 "XInput Send Task", 4036,
                                 NULL, 0, &_xinput_task_handler, 0);
+        
+        vTaskDelay(100/portTICK_PERIOD_MS);
                                 
         esp_hid_ble_gap_adv_start();
         break;
@@ -44,7 +46,7 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
         ESP_LOGI(TAG, "CONNECT");
         xinput_event_s connect_event = {.event = XINPUT_EVT_HID_CONNECT, .hid_connected = true};
         xQueueSend(_xinput_event_queue, &connect_event, 0);
-        app_set_connected(1);
+        app_set_connected_status(1);
         break;
     }
     case ESP_HIDD_PROTOCOL_MODE_EVENT:
@@ -70,14 +72,11 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
             uint8_t _rumble_intensity = (param->output.data[3] >= param->output.data[4]) ? param->output.data[3] : param->output.data[4];
             if(!_rumble_intensity)
             {
-                app_set_rumble(0, 0, 0, 0);
+                app_set_standard_haptic(0, 0);
             }
             else
             {
-                float _rumble_intensity_f = ((float)_rumble_intensity / 255.0f) * 100;
-                _rumble_intensity_f = (_rumble_intensity_f>100) ? 100 : _rumble_intensity_f;
-                //ESP_LOGI("RUMBLE", "INTENSITY: %i", (uint8_t) _rumble_intensity_f);
-                app_set_rumble(40, (uint8_t) _rumble_intensity, 40, (uint8_t) _rumble_intensity);
+                app_set_standard_haptic(param->output.data[3], param->output.data[4]);
             }
             
         }
@@ -96,7 +95,7 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
         xQueueSend(_xinput_event_queue, &connect_event, 0);
         
         esp_hid_ble_gap_adv_start();
-        app_set_connected(0);
+        app_set_connected_status(0);
         break;
     }
     case ESP_HIDD_STOP_EVENT:
@@ -185,7 +184,7 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
             xinput_event_s connect_event = {.event = XINPUT_EVT_GAP_AUTH, .gap_auth = true};
             xQueueSend(_xinput_event_queue, &connect_event, 0);
-            app_set_connected(1);
+            app_set_connected_status(1);
         }
         break;
 

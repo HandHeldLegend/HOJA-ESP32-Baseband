@@ -100,16 +100,37 @@ typedef union
     uint8_t bat_status;
   } switch_battery_status_u;
 
+// Status return data types
+typedef enum
+{
+    I2C_STATUS_NULL, // Nothing to report
+    I2C_STATUS_HAPTIC_STANDARD, // Standard haptic data
+    I2C_STATUS_HAPTIC_SWITCH, // Nintendo Switch haptic data
+    I2C_STATUS_FIRMWARE_VERSION, // Report fw version
+    I2C_STATUS_CONNECTED_STATUS, // Connected status change
+    I2C_STATUS_POWER_CODE, // Change power setting
+    I2C_STATUS_MAC_UPDATE, // Update HOST save MAC address
+} i2cinput_status_t;
 
-// 11 bytes
+typedef enum
+{
+    I2C_CMD_STANDARD = 0xFF, // Regular input data
+    I2C_CMD_MOTION = 0xFC, // Motion data
+    I2C_CMD_START = 0xFE, // Launch BT Mode with parameter
+    I2C_CMD_FIRMWARE_VERSION = 0xFD, // Retrieve the firmware version
+} i2cinput_cmd_t;
+
 typedef struct
 {
-    uint8_t connected_status; // Value representing if the BT is connected
-    uint8_t rumble_amplitude_hi;
-    float   rumble_frequency_hi;
-    uint8_t rumble_amplitude_lo;
-    float   rumble_frequency_lo;
-} i2cinput_status_s;
+    uint8_t cmd;
+    uint32_t rand_seed; // Random data to help our CRC
+    uint8_t data[10]; // Buffer for related data   
+} __attribute__ ((packed)) i2cinput_status_s;
+
+typedef struct
+{
+    uint8_t haptic_data[11]; // Value representing haptic information
+} __attribute__ ((packed)) i2cinput_switch_haptic_s;
 
   typedef struct
 {
@@ -225,5 +246,29 @@ typedef struct {
     uint16_t timestamp_start_h : 10;
     uint16_t timestamp_count : 6;
 } __attribute__ ((packed)) mode_2_s;
+
+typedef struct
+{
+    float hi_freq_linear;
+    float hi_amp_linear;
+    float lo_freq_linear;
+    float lo_amp_linear;
+} __attribute__((packed)) hoja_haptic_frame_linear_s;
+
+typedef struct
+{
+    float   high_frequency;
+    float   high_amplitude;
+    float   low_frequency;
+    float   low_amplitude;
+} __attribute__ ((packed)) hoja_haptic_frame_s;
+
+typedef struct
+{
+    uint8_t sample_count;
+    bool unread;
+    hoja_haptic_frame_linear_s linear; // Last known state 
+    hoja_haptic_frame_s samples[3];
+} __attribute__ ((packed)) hoja_rumble_msg_s;
 
 #endif

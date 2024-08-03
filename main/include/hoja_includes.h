@@ -1,7 +1,7 @@
 #ifndef HOJA_INCLUDES_H
 #define HOJA_INCLUDES_H
 
-#define HOJA_BASEBAND_VERSION 0xA00E
+#define HOJA_BASEBAND_VERSION 0xA00F
 #include "hoja_types.h"
 #include <string.h>
 #include <inttypes.h>
@@ -12,7 +12,11 @@
 
 #include "sdkconfig.h"
 #include "esp_system.h"
+#include "esp_task_wdt.h"
+#include "esp_random.h"
 #include "esp_mac.h"
+#include "esp_attr.h"
+#include "esp_ipc.h"
 
 #include "esp_hid_common.h"
 #include "esp_hidd.h"
@@ -33,7 +37,10 @@
 #include "esp_log.h"
 #include "esp_err.h"
 
-#include "driver/i2c.h"
+#include "soc/i2c_struct.h"
+//#include "driver/i2c.h"
+#include "mitch_i2c.h"
+//#include "driver/i2c_slave.h" BAD
 
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
@@ -55,21 +62,9 @@ typedef enum
     INPUT_MODE_MAX,
 } input_mode_t;
 
-typedef enum
-{
-    I2CINPUT_ID_INIT    = 0xF2,
-    I2CINPUT_ID_INPUT   = 0x01,
-    I2CINPUT_ID_STATUS  = 0xF4,
-    I2CINPUT_ID_SAVEMAC = 0xF3,
-    I2CINPUT_ID_STOP    = 0x02,
-    I2CINPUT_ID_SHUTDOWN = 0xA0,
-    I2CINPUT_ID_CONNECTED = 0xA1,
-    I2CINPUT_ID_GETVERSION = 0xFF,
-    I2CINPUT_ID_REBOOT = 0xA1,
-} i2cinput_id_t;
-
 typedef struct
 {
+    // Buttons
     union
     {
         struct
@@ -102,6 +97,7 @@ typedef struct
         uint16_t buttons_all;
     };
 
+    // Buttons system
     union
     {
         struct
@@ -128,8 +124,7 @@ typedef struct
     int16_t gx;
     int16_t gy;
     int16_t gz;
-    
-} i2cinput_input_s;
+} __attribute__ ((packed)) i2cinput_input_s;
 
 #include "hoja.h"
 

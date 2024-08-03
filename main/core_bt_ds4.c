@@ -214,7 +214,7 @@ void ds4_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void 
                 ESP_LOGI(TAG, "CONNECT OK");
                 ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable");
                 esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                app_set_connected(1);
+                app_set_connected_status(1);
                 // START INPUT TASK
                 ds4_task_start(true);
             }
@@ -252,7 +252,7 @@ void ds4_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void 
             {
                 ESP_LOGI(TAG, "DISCONNECT OK");
                 // STOP INPUT TASK
-                app_set_connected(0);
+                app_set_connected_status(0);
                 ESP_LOGI(TAG, "Setting to connectable, discoverable again");
                 esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
             }

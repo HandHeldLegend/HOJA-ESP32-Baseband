@@ -29,7 +29,7 @@ intr_handle_t intr_handle; /*!< I2C interrupt handle*/
 volatile uint8_t _rx_buffer[I2C_MAX_ALLOWED_SIZE] = {0};
 // Request size sets how large the buffer
 // should be when we read data
-volatile uint32_t _rx_request_size = 24;
+volatile uint32_t _rx_request_size = 32;
 volatile uint32_t _rx_buffer_idx = 0;
 volatile uint32_t _rx_buffer_size = 0;
 volatile bool _rx_done = false;
@@ -170,7 +170,7 @@ void mi2c_slave_setup()
 
     i2c_ll_set_slave_addr(&I2C0, c.slave.slave_addr, c.slave.addr_10bit_en);
 
-    i2c_ll_set_rxfifo_full_thr(&I2C0, 24);
+    i2c_ll_set_rxfifo_full_thr(&I2C0, 32);
     i2c_ll_set_txfifo_empty_thr(&I2C0, 0);
 
     i2c_ll_master_set_filter(&I2C0, 2);

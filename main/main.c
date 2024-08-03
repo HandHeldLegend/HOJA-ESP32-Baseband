@@ -6,7 +6,7 @@
 
 #include "hoja_includes.h"
 
-#define I2C_RX_BUFFER_SIZE 24 // Size of the input, plus a byte for ID
+#define I2C_RX_BUFFER_SIZE 32 // Size of the input, plus a byte for ID
 #define I2C_TX_BUFFER_SIZE 24
 
 #define I2C_MSG_STATUS_IDX 4
@@ -36,7 +36,6 @@ uint32_t get_timestamp_us()
 uint8_t _i2c_buffer_in[I2C_RX_BUFFER_SIZE];
 uint8_t _i2c_buffer_out[I2C_TX_BUFFER_SIZE];
 
-static volatile uint8_t _connected_number = 0;
 QueueHandle_t main_receive_queue;
 
 // Polynomial for CRC-8 (x^8 + x^2 + x + 1)
@@ -133,6 +132,7 @@ uint8_t *ringbuffer_get(RingBuffer *rb)
     return data;
 }
 
+
 // Loads messages into our cross-core buffer
 void ringbuffer_load_threadsafe(uint8_t *data)
 {
@@ -141,13 +141,23 @@ void ringbuffer_load_threadsafe(uint8_t *data)
     xQueueSend(main_receive_queue, &msg, 0);
 }
 
+volatile bool haptic_buffer_connected = false;
 // Obtain messages from our cross-core buffer
 void ringbuffer_unload_threadsafe()
 {
     static packed_i2c_msg msg = {0};
     while(xQueueReceive(main_receive_queue, &msg, 0) == pdTRUE)
     {
-        ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
+        if(!haptic_buffer_connected)
+        {
+            // Check if it's haptic data. Do not send if so
+            i2cinput_status_s tmp = {0};
+            memcpy(&tmp, &msg.data[1], sizeof(i2cinput_status_s));
+            if(tmp.cmd != I2C_STATUS_HAPTIC_STANDARD);
+            ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
+        }
+        else ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
+            
     }
 }
 
@@ -289,42 +299,30 @@ uint8_t _current_rx_crc = 0;
 void bt_device_input(uint8_t* data, bool motion)
 {
     static i2cinput_input_s input_data = {0};
-    static i2cinput_motion_s motion_data = {0};
     static imu_data_s _new_imu = {0};
 
     uint8_t crc = data[1];
     bool crc_valid = false;
 
-    if(motion)
-    {
-        crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_motion_s), crc);
-        if(!crc_valid) return;
+    crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_input_s), crc);
+    if(!crc_valid) return;
 
-        _current_rx_crc = data[2];
+    _current_rx_crc = data[2];
 
-        memcpy(&motion_data, &(data[3]), sizeof(i2cinput_motion_s));
-        _new_imu.ax = motion_data.ax;
-        _new_imu.ay = motion_data.ay;
-        _new_imu.az = motion_data.az;
-        _new_imu.gx = motion_data.gx;
-        _new_imu.gy = motion_data.gy;
-        _new_imu.gz = motion_data.gz;
-        imu_fifo_push(&_new_imu);
-    }
-    else
-    {
-        crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_input_s), crc);
-        if(!crc_valid) return;
+    memcpy(&input_data, &(data[3]), sizeof(i2cinput_input_s));
 
-        _current_rx_crc = data[2];
+    _new_imu.ax = input_data.ax;
+    _new_imu.ay = input_data.ay;
+    _new_imu.az = input_data.az;
+    _new_imu.gx = input_data.gx;
+    _new_imu.gy = input_data.gy;
+    _new_imu.gz = input_data.gz;
+    imu_fifo_push(&_new_imu);
 
-        memcpy(&input_data, &(data[3]), sizeof(i2cinput_input_s));
+    if (!_bluetooth_input_cb)
+    return;
 
-        if (!_bluetooth_input_cb)
-        return;
-
-        _bluetooth_input_cb(&input_data);
-    } 
+    _bluetooth_input_cb(&input_data);
 }
 
 void i2c_handle_new_tx()
@@ -427,19 +425,17 @@ void bt_device_start(uint8_t *data)
 // Return current FW version
 void bt_device_return_fw_version()
 {
-    i2cinput_status_s firmware_status = {
-        .cmd = I2C_STATUS_FIRMWARE_VERSION,
-    };
-
-    firmware_status.data[0] = HOJA_BASEBAND_VERSION >> 8;
-    firmware_status.data[1] = HOJA_BASEBAND_VERSION & 0xFF;
+    uint8_t tmp_out[I2C_TX_BUFFER_SIZE] = {0};
+    tmp_out[0] = I2C_STATUS_FIRMWARE_VERSION;
+    tmp_out[1] = HOJA_BASEBAND_VERSION >> 8;
+    tmp_out[2] = HOJA_BASEBAND_VERSION & 0xFF;
 
     // Generate random seed
     //firmware_status.rand_seed = 0;
     //firmware_status.crc = 0;
 
     // Instant transmit
-    //mi2c_slave_polling_write((uint8_t *)&firmware_status, sizeof(i2cinput_status_s), pdMS_TO_TICKS(1000));
+    mi2c_slave_polling_write(tmp_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(1000));
 }
 
 volatile uint32_t _timer = 0;
@@ -534,6 +530,8 @@ void app_main(void)
                 break;
 
             case I2C_CMD_STANDARD:
+                // Say we're OK to send haptic data
+                haptic_buffer_connected = true;
                 // ESP_LOGI(TAG, "Input RX");
                 bt_device_input(_i2c_buffer_in, false);
                 // Transmit
@@ -549,14 +547,13 @@ void app_main(void)
 
             case I2C_CMD_START:
                 ESP_LOGI(TAG, "Start System RX");
-                
                 bt_device_start(_i2c_buffer_in);
                 // We do not transmit anything with this command
                 break;
 
             case I2C_CMD_FIRMWARE_VERSION:
                 ESP_LOGI(TAG, "Firmware Version Request RX");
-                // bt_device_return_fw_version();
+                bt_device_return_fw_version();
                 break;
             }
             

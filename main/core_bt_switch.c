@@ -2,7 +2,7 @@
 #include "esp_log.h"
 
 #define DEFAULT_TICK_DELAY (8/portTICK_PERIOD_MS)
-#define DEFAULT_US_DELAY (16*1000)
+#define DEFAULT_US_DELAY (8*1000)
 static volatile bool        _hid_connected = false;
 static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
 static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
@@ -99,7 +99,7 @@ QueueHandle_t ns_event_queue;
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
 
-sw_input_s _switch_input_data = {};
+sw_input_s _switch_input_data = {.ls_x = 2047, .ls_y = 2047, .rs_x = 2047, .rs_y = 2047};
 
 void _switch_bt_task_standard(void *parameters);
 void _switch_bt_task_empty(void *parameters);

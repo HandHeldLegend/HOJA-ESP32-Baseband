@@ -243,6 +243,13 @@ mi2c_status_t mi2c_slave_polling_read(uint8_t *data, size_t size, uint32_t ms_wa
     return MI2C_TIMEOUT;
 }
 
+// This returns if our TX buffer
+// is available to write to
+bool mi2c_slave_write_ready()
+{
+    return _tx_done;
+}
+
 mi2c_status_t mi2c_slave_polling_write(const uint8_t *data, size_t size, TickType_t ticks_to_wait)
 {
     // Copy data into our buffer
@@ -256,22 +263,6 @@ mi2c_status_t mi2c_slave_polling_write(const uint8_t *data, size_t size, TickTyp
 
     i2c_ll_write_txfifo(&I2C0, _tx_buffer, size);
     i2c_ll_slave_enable_tx_it(&I2C0);
-    
-    while ((!_tx_done) && (ticks_current <= ticks_end))
-    {
-        // Update our timer
-        ticks_current = xTaskGetTickCount();
-        portYIELD();
-    }
 
-    if (_tx_done)
-    {
-        //printf("TX OK\n");
-        return MI2C_OK;
-    }
-    else
-    {
-        return MI2C_TIMEOUT;
-    }
-    return MI2C_TIMEOUT;
+    return MI2C_OK;
 }

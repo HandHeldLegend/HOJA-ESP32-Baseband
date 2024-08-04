@@ -19,6 +19,7 @@ void mi2c_clear_fifos();
 void mi2c_clear_tx_fifo();
 void mi2c_clear_rx_fifo();
 mi2c_status_t mi2c_slave_polling_read(uint8_t *data, size_t size, TickType_t ticks_to_wait);
+bool mi2c_slave_write_ready();
 mi2c_status_t mi2c_slave_polling_write(const uint8_t *data, size_t size, TickType_t ticks_to_wait);
 
 #endif

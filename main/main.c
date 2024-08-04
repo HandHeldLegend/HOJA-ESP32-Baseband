@@ -103,9 +103,11 @@ bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
     if (rb->count == rb->size)
     {
         // Buffer is full
-        //xSemaphoreGive(mutex_handle);
-        printf("F\n");
-        return false;
+        // Buffer is full, reset the buffer
+        printf("Buffer full, resetting\n");
+        rb->head = 0;
+        rb->tail = 0;
+        rb->count = 0;
     }
 
     memcpy(&(_i2c_status_buffer[rb->head]), data, I2C_TX_BUFFER_SIZE);
@@ -138,7 +140,11 @@ void ringbuffer_load_threadsafe(uint8_t *data)
 {
 
     if(uxQueueSpacesAvailable(main_receive_queue) <= 1)
+    {
+        printf("Queue full\n");
         xQueueReset(main_receive_queue);
+    }
+        
 
     static packed_i2c_msg msg = {0};
     memcpy(&(msg.data[0]), data, I2C_TX_BUFFER_SIZE);
@@ -334,6 +340,9 @@ void i2c_handle_new_tx()
     static uint8_t *rb_buffer = NULL;
     static bool first = false;
 
+    // Only handle this if we have the free space
+    if(!mi2c_slave_write_ready()) return;
+
     // If our ringbuffer is null
     if (rb_buffer == NULL)
     {
@@ -344,9 +353,20 @@ void i2c_handle_new_tx()
     // We will need to confirm the CRC before pulling the next ringbuffer message
     else
     {
-        if (_current_rx_crc == rb_buffer[0]) // This confirms it's okay to load the next ringbuffer status
+        static uint8_t attempts = 25; // Attempt count. If we don't get a matching CRC within this, get a new one.
+
+        if ( (_current_rx_crc == rb_buffer[0]) || !(attempts--)) // This confirms it's okay to load the next ringbuffer status
         {
+            if(!attempts)
+                printf("CRC attempt timeout\n");
+            //else printf("CRC OK\n");
+
+            attempts = 25;
             rb_buffer = ringbuffer_get(&_status_ringbuffer);
+        }
+        else if(_current_rx_crc != rb_buffer[0])
+        {
+            //printf("CRC mismatch\n");
         }
     }
 
@@ -358,7 +378,7 @@ void i2c_handle_new_tx()
     else // Transmit ringbuffer data
     {
         memcpy(_i2c_buffer_out, rb_buffer, I2C_TX_BUFFER_SIZE);
-        mi2c_slave_polling_write(_i2c_buffer_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(8));
+        mi2c_slave_polling_write(_i2c_buffer_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(32));
     }
 }
 

@@ -136,6 +136,10 @@ uint8_t *ringbuffer_get(RingBuffer *rb)
 // Loads messages into our cross-core buffer
 void ringbuffer_load_threadsafe(uint8_t *data)
 {
+
+    if(uxQueueSpacesAvailable(main_receive_queue) <= 1)
+        xQueueReset(main_receive_queue);
+
     static packed_i2c_msg msg = {0};
     memcpy(&(msg.data[0]), data, I2C_TX_BUFFER_SIZE);
     xQueueSend(main_receive_queue, &msg, 0);

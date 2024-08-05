@@ -18,6 +18,8 @@
 #define I2C_SLAVE_NUM I2C_NUM_0                /*!< I2C port number for slave dev */
 #define ESP_SLAVE_ADDR 0x76
 
+uint8_t _current_rx_crc = 0;
+
 typedef struct
 {
     uint8_t data[I2C_RX_BUFFER_SIZE];
@@ -104,7 +106,7 @@ bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
     {
         // Buffer is full
         // Buffer is full, reset the buffer
-        printf("Buffer full, resetting\n");
+        printf("Buffer full - CRC: 0x%x\n", _current_rx_crc);
         rb->head = 0;
         rb->tail = 0;
         rb->count = 0;
@@ -303,7 +305,6 @@ void app_save_host_mac()
     memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
 }
 
-uint8_t _current_rx_crc = 0;
 // Handle incoming input data
 // and call our input callback
 void bt_device_input(uint8_t* data, bool motion)
@@ -338,31 +339,36 @@ void bt_device_input(uint8_t* data, bool motion)
 void i2c_handle_new_tx()
 {
     static uint8_t *rb_buffer = NULL;
-    static bool first = false;
+    static uint8_t rb_buffer_tmp[I2C_TX_BUFFER_SIZE] = {0};
+    static bool ready_to_send = false;
 
     // Only handle this if we have the free space
     if(!mi2c_slave_write_ready()) return;
 
-    // If our ringbuffer is null
-    if (rb_buffer == NULL)
+    if(!ready_to_send)
     {
         // Try to get the next buffer in line
         rb_buffer = ringbuffer_get(&_status_ringbuffer);
-    }
-    // For this else statement, we already have sent a ringbuffer message
-    // We will need to confirm the CRC before pulling the next ringbuffer message
-    else
-    {
-        static uint8_t attempts = 25; // Attempt count. If we don't get a matching CRC within this, get a new one.
 
-        if ( (_current_rx_crc == rb_buffer[0]) || !(attempts--)) // This confirms it's okay to load the next ringbuffer status
+        if(rb_buffer!=NULL)
+        {
+            memcpy(rb_buffer_tmp, rb_buffer, I2C_TX_BUFFER_SIZE);
+            ready_to_send = true;
+        }
+    }
+
+    {
+        const uint8_t attempt_count = 10;
+        static uint8_t attempts = attempt_count; // Attempt count. If we don't get a matching CRC within this, get a new one.
+
+        if ( (_current_rx_crc == rb_buffer_tmp[0]) || !(attempts--)) // This confirms it's okay to load the next ringbuffer status
         {
             if(!attempts)
                 printf("CRC attempt timeout\n");
             //else printf("CRC OK\n");
 
-            attempts = 25;
-            rb_buffer = ringbuffer_get(&_status_ringbuffer);
+            attempts = attempt_count;
+            ready_to_send = false;
         }
         else if(_current_rx_crc != rb_buffer[0])
         {
@@ -371,13 +377,9 @@ void i2c_handle_new_tx()
     }
 
     // Send nothing if we have nothing to send
-    if (rb_buffer == NULL)
+    if (ready_to_send)
     {
-       return;
-    }
-    else // Transmit ringbuffer data
-    {
-        memcpy(_i2c_buffer_out, rb_buffer, I2C_TX_BUFFER_SIZE);
+        memcpy(_i2c_buffer_out, rb_buffer_tmp, I2C_TX_BUFFER_SIZE);
         mi2c_slave_polling_write(_i2c_buffer_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(32));
     }
 }

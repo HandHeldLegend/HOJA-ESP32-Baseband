@@ -18,7 +18,12 @@
 #define I2C_SLAVE_NUM I2C_NUM_0                /*!< I2C port number for slave dev */
 #define ESP_SLAVE_ADDR 0x76
 
-uint8_t _current_rx_crc = 0;
+#define I2C_TX_CRC_IDX 0
+#define I2C_TX_COUNTER_IDX 1
+#define I2C_TX_STATUS_IDX 2
+
+// Last processed packet number from Host
+uint8_t _current_rx_packet_num = 0;
 
 typedef struct
 {
@@ -106,7 +111,7 @@ bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
     {
         // Buffer is full
         // Buffer is full, reset the buffer
-        printf("Buffer full - CRC: 0x%x\n", _current_rx_crc);
+        printf("Buffer full - Packet num: 0x%x\n", _current_rx_packet_num);
         rb->head = 0;
         rb->tail = 0;
         rb->count = 0;
@@ -136,7 +141,6 @@ uint8_t *ringbuffer_get(RingBuffer *rb)
     return data;
 }
 
-
 // Loads messages into our cross-core buffer
 void ringbuffer_load_threadsafe(uint8_t *data)
 {
@@ -164,13 +168,22 @@ void ringbuffer_unload_threadsafe()
         {
             // Check if it's haptic data. Do not send if so
             i2cinput_status_s tmp = {0};
-            memcpy(&tmp, &msg.data[1], sizeof(i2cinput_status_s));
-            if(tmp.cmd != I2C_STATUS_HAPTIC_STANDARD);
-            ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
+            memcpy(&tmp, &msg.data[I2C_TX_STATUS_IDX], sizeof(i2cinput_status_s));
+
+            if(tmp.cmd != I2C_STATUS_HAPTIC_STANDARD)
+                ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
         }
         else ringbuffer_set(&_status_ringbuffer, &(msg.data[0]));
             
     }
+}
+
+// Only call from core 1
+uint8_t app_core1_get_packet_counter()
+{
+    static uint16_t counter = 0;
+    counter = (counter+1) % 0xFF;
+    return (uint8_t) counter;
 }
 
 // Only call from core 1
@@ -184,10 +197,11 @@ void app_set_connected_status(uint8_t status)
     conn_status.data[0] = status;
     conn_status.rand_seed = esp_random();
 
-    memcpy(&(conn_buffer[1]), &conn_status, sizeof(i2cinput_status_s));
+    memcpy(&(conn_buffer[I2C_TX_STATUS_IDX]), &conn_status, sizeof(i2cinput_status_s));
 
     uint8_t crc = crc8_compute((uint8_t *) &conn_status, sizeof(i2cinput_status_s));
-    conn_buffer[0] = crc;
+    conn_buffer[I2C_TX_CRC_IDX] = crc;
+    conn_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
 
     ringbuffer_load_threadsafe(conn_buffer);
 }
@@ -219,10 +233,11 @@ void app_set_power_setting(uint8_t power)
     power_status.data[0] = power;
     power_status.rand_seed = esp_random();
 
-    memcpy(&(power_buffer[1]), &power_status, sizeof(i2cinput_status_s));
+    memcpy(&(power_buffer[I2C_TX_STATUS_IDX]), &power_status, sizeof(i2cinput_status_s));
 
     uint8_t crc = crc8_compute((uint8_t *) &power_status, sizeof(i2cinput_status_s));
-    power_buffer[0] = crc;
+    power_buffer[I2C_TX_CRC_IDX] = crc;
+    power_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
 
     ringbuffer_load_threadsafe(power_buffer);
     //ringbuffer_set(&_status_ringbuffer, power_buffer);
@@ -242,16 +257,18 @@ void app_set_switch_haptic(uint8_t *data)
     haptic_status.rand_seed = esp_random();
 
     // Copy haptic_status into haptic_buffer
-    memcpy(&(haptic_buffer[1]), &haptic_status, sizeof(i2cinput_status_s));
+    memcpy(&(haptic_buffer[I2C_TX_STATUS_IDX]), &haptic_status, sizeof(i2cinput_status_s));
 
     // Set the CRC at byte 0 of our outgoing data
     uint8_t crc = crc8_compute((uint8_t *)&haptic_status, sizeof(i2cinput_status_s));
-    haptic_buffer[0] = crc;
+    haptic_buffer[I2C_TX_CRC_IDX] = crc;
+    haptic_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
 
     ringbuffer_load_threadsafe(haptic_buffer);
     //ringbuffer_set(&_status_ringbuffer, haptic_buffer);
 }
 
+// Only call from core 1
 void app_set_standard_haptic(uint8_t left, uint8_t right)
 {
     uint8_t haptic_buffer[I2C_TX_BUFFER_SIZE] = {0};
@@ -266,11 +283,12 @@ void app_set_standard_haptic(uint8_t left, uint8_t right)
     haptic_status.rand_seed = esp_random();
 
     // Copy haptic_status into haptic_buffer
-    memcpy(&(haptic_buffer[1]), &haptic_status, sizeof(i2cinput_status_s));
+    memcpy(&(haptic_buffer[I2C_TX_STATUS_IDX]), &haptic_status, sizeof(i2cinput_status_s));
 
     // Set the CRC at byte 0 of our outgoing data
     uint8_t crc = crc8_compute((uint8_t *)&haptic_status, sizeof(i2cinput_status_s));
-    haptic_buffer[0] = crc;
+    haptic_buffer[I2C_TX_CRC_IDX] = crc;
+    haptic_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
 
     ringbuffer_load_threadsafe(haptic_buffer);
 }
@@ -296,10 +314,11 @@ void app_save_host_mac()
     mac_status.rand_seed = esp_random();
 
     // Copy haptic_status into haptic_buffer
-    memcpy(&(mac_buffer[1]), &mac_status, sizeof(i2cinput_status_s));
+    memcpy(&(mac_buffer[I2C_TX_STATUS_IDX]), &mac_status, sizeof(i2cinput_status_s));
 
     uint8_t crc = crc8_compute((uint8_t *)&mac_status, sizeof(i2cinput_status_s));
-    mac_buffer[0] = crc;
+    mac_buffer[I2C_TX_CRC_IDX] = crc;
+    mac_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
 
     ringbuffer_set(&_status_ringbuffer, mac_buffer);
     memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
@@ -318,7 +337,7 @@ void bt_device_input(uint8_t* data, bool motion)
     crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_input_s), crc);
     if(!crc_valid) return;
 
-    _current_rx_crc = data[2];
+    _current_rx_packet_num = data[2];
 
     memcpy(&input_data, &(data[3]), sizeof(i2cinput_input_s));
 
@@ -356,24 +375,9 @@ void i2c_handle_new_tx()
             ready_to_send = true;
         }
     }
-
+    else if ( _current_rx_packet_num == rb_buffer_tmp[I2C_TX_COUNTER_IDX] ) // This confirms it's okay to load the next ringbuffer status
     {
-        const uint8_t attempt_count = 10;
-        static uint8_t attempts = attempt_count; // Attempt count. If we don't get a matching CRC within this, get a new one.
-
-        if ( (_current_rx_crc == rb_buffer_tmp[0]) || !(attempts--)) // This confirms it's okay to load the next ringbuffer status
-        {
-            if(!attempts)
-                printf("CRC attempt timeout\n");
-            //else printf("CRC OK\n");
-
-            attempts = attempt_count;
-            ready_to_send = false;
-        }
-        else if(_current_rx_crc != rb_buffer[0])
-        {
-            //printf("CRC mismatch\n");
-        }
+        ready_to_send = false;
     }
 
     // Send nothing if we have nothing to send
@@ -528,6 +532,7 @@ void app_main(void)
     // Create mutex
     main_receive_queue = xQueueCreate(32, sizeof(packed_i2c_msg));
 
+    // Initialize flash storage
     ret = nvs_flash_init();
     if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
     {
@@ -536,12 +541,13 @@ void app_main(void)
     }
     ESP_ERROR_CHECK(ret);
 
+    // Set up I2C slave device with custom driver
     mi2c_slave_setup();
-    //legacy_i2c_setup();
 
     // Main I2C loop
     for (;;)
     {   
+        // Unload any and all pending messages
         ringbuffer_unload_threadsafe();
 
         mi2c_status_t read_status = mi2c_slave_polling_read(_i2c_buffer_in, I2C_RX_BUFFER_SIZE, 8);

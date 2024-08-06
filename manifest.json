@@ -1,15 +1,4 @@
 {
-    "name": "HOJA Baseband",
-    "version": "8.5.2024",
-    "new_install_prompt_erase": true,
-    "builds": [
-      {
-        "chipFamily": "ESP32",
-        "parts": [
-          { "path": "https:\/\/raw.githubusercontent.com\/HandHeldLegend\/HOJA-ESP32-Baseband\/master\/build\/bootloader\/bootloader.bin", "offset": 4096 },
-          { "path": "https:\/\/raw.githubusercontent.com\/HandHeldLegend\/HOJA-ESP32-Baseband\/master\/build\/partition_table\/partition-table.bin", "offset": 32768 },
-          { "path": "https:\/\/raw.githubusercontent.com\/HandHeldLegend\/HOJA-ESP32-Baseband\/master\/build\/ESP32.bin", "offset": 65536 }
-        ]
-      }
-    ]
-  }
+  "changelog": "8.5.2024r1<br>-I2C comms updated for Bluetooth (required update)",
+  "fw_version": 40981
+}

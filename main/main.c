@@ -112,6 +112,7 @@ bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
         // Buffer is full
         // Buffer is full, reset the buffer
         printf("Buffer full - Packet num: 0x%x\n", _current_rx_packet_num);
+
         rb->head = 0;
         rb->tail = 0;
         rb->count = 0;

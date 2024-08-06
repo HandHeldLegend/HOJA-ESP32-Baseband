@@ -94,12 +94,13 @@ static void IRAM_ATTR mi2c_isr_handler_default(void *arg)
         uint32_t rx_fifo_cnt = 0;
         i2c_ll_get_rxfifo_cnt(&I2C0, &rx_fifo_cnt);
         
-        if(rx_fifo_cnt>0)
+        //if(rx_fifo_cnt)
+        //{
+        //    i2c_ll_read_rxfifo(&I2C0, &(_rx_buffer[0]), rx_fifo_cnt);
+        //}
+        if(rx_fifo_cnt >= 32)
         {
             i2c_ll_read_rxfifo(&I2C0, &(_rx_buffer[0]), rx_fifo_cnt);
-        }
-        if(rx_fifo_cnt >= _rx_request_size)
-        {
             mi2c_ringbuffer_set(_rx_buffer, _rx_request_size);
         }
         
@@ -246,7 +247,18 @@ mi2c_status_t mi2c_slave_polling_read(uint8_t *data, size_t size, uint32_t ms_wa
 // This returns if our TX buffer
 // is available to write to
 bool mi2c_slave_write_ready()
-{
+{   
+    uint32_t len;
+    //i2c_ll_get_rxfifo_cnt(&I2C0, &len);
+    i2c_ll_get_txfifo_len(&I2C0, &len);
+
+    // Only write when we have a full available TX space (32 bytes)
+    if(len != 32)
+    {
+        //printf("i2c err: %d bytes available to write\n", (int) len);
+        return false;
+    }
+
     return _tx_done;
 }
 

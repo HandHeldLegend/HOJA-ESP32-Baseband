@@ -57,6 +57,7 @@ bool mi2c_ringbuffer_set(uint8_t *data, uint32_t size)
     if (_rx_ringbuffer_.count == _rx_ringbuffer_.size)
     {
         // Buffer is full
+        //
         return false;
     }
     memcpy(&(_rx_ring_buffer[_rx_ringbuffer_.head]), data, size);
@@ -73,6 +74,7 @@ uint8_t *mi2c_ringbuffer_get()
         // Buffer is empty
         return NULL;
     }
+
     i2cinput_status_s *data = &(_rx_ring_buffer[_rx_ringbuffer_.tail]);
     _rx_ringbuffer_.tail = (_rx_ringbuffer_.tail + 1) % _rx_ringbuffer_.size;
     _rx_ringbuffer_.count--;
@@ -210,7 +212,6 @@ void mi2c_clear_tx_fifo()
 
 void mi2c_clear_fifos()
 {
-
     MI2C_ENTER_CRITICAL((portMUX_TYPE *)&spinlock);
     uint32_t tmp = I2C0.fifo_conf.val;
     typeof(I2C0.fifo_conf) temp_reg;
@@ -248,6 +249,7 @@ mi2c_status_t mi2c_slave_polling_read(uint8_t *data, size_t size, uint32_t ms_wa
 // is available to write to
 bool mi2c_slave_write_ready()
 {   
+
     uint32_t len;
     //i2c_ll_get_rxfifo_cnt(&I2C0, &len);
     i2c_ll_get_txfifo_len(&I2C0, &len);
@@ -259,7 +261,7 @@ bool mi2c_slave_write_ready()
         return false;
     }
 
-    return _tx_done;
+    return true;
 }
 
 mi2c_status_t mi2c_slave_polling_write(const uint8_t *data, size_t size, TickType_t ticks_to_wait)
@@ -273,7 +275,9 @@ mi2c_status_t mi2c_slave_polling_write(const uint8_t *data, size_t size, TickTyp
     TickType_t ticks_current = xTaskGetTickCount();
     TickType_t ticks_end = ticks_current + ticks_to_wait;
 
+    //printf("write to tx fifo\n");
     i2c_ll_write_txfifo(&I2C0, _tx_buffer, size);
+    //printf("enable tx fifo isr\n");
     i2c_ll_slave_enable_tx_it(&I2C0);
 
     return MI2C_OK;

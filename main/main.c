@@ -24,6 +24,7 @@
 
 // Last processed packet number from Host
 uint8_t _current_rx_packet_num = 0;
+uint8_t _current_tx_packet_num = 0;
 
 typedef struct
 {
@@ -111,7 +112,8 @@ bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
     {
         // Buffer is full
         // Buffer is full, reset the buffer
-        printf("Buffer full - Packet num: 0x%x\n", _current_rx_packet_num);
+        //printf("Buffer full - RX Packet num: 0x%x\n", _current_rx_packet_num);
+        //printf("TX Packet num: 0x%x\n", _current_tx_packet_num);
 
         rb->head = 0;
         rb->tail = 0;
@@ -133,8 +135,10 @@ uint8_t *ringbuffer_get(RingBuffer *rb)
     {
         // Buffer is empty
         //xSemaphoreGive(mutex_handle);
+        //printf("rx empty...\n");
         return NULL;
     }
+    //printf("rx OK...\n");
     uint8_t *data = _i2c_status_buffer[rb->tail];
     rb->tail = (rb->tail + 1) % rb->size;
     rb->count--;
@@ -360,29 +364,40 @@ void i2c_handle_new_tx()
 {
     static uint8_t *rb_buffer = NULL;
     static uint8_t rb_buffer_tmp[I2C_TX_BUFFER_SIZE] = {0};
-    static bool ready_to_send = false;
+    static bool get_next_packet = false;
+    static bool confirmed_packet_sent = false;
 
     // Only handle this if we have the free space
+    //printf("Check i2c ready to send...\n");
     if(!mi2c_slave_write_ready()) return;
 
-    if(!ready_to_send)
+    if(get_next_packet)
     {
         // Try to get the next buffer in line
+        //printf("get next tx buffer\n");
         rb_buffer = ringbuffer_get(&_status_ringbuffer);
 
         if(rb_buffer!=NULL)
         {
+            
             memcpy(rb_buffer_tmp, rb_buffer, I2C_TX_BUFFER_SIZE);
-            ready_to_send = true;
+            _current_tx_packet_num = rb_buffer_tmp[I2C_TX_COUNTER_IDX];
+            get_next_packet = false;
+            confirmed_packet_sent = false;
         }
     }
-    else if ( _current_rx_packet_num == rb_buffer_tmp[I2C_TX_COUNTER_IDX] ) // This confirms it's okay to load the next ringbuffer status
+    else if(!confirmed_packet_sent && !get_next_packet)
     {
-        ready_to_send = false;
+        if ( _current_rx_packet_num == rb_buffer_tmp[I2C_TX_COUNTER_IDX] ) // This confirms it's okay to load the next ringbuffer status
+        {
+            //printf("TX Confirmed received\n");
+            confirmed_packet_sent = true;
+            get_next_packet = true;
+        }
     }
 
     // Send nothing if we have nothing to send
-    if (ready_to_send)
+    if (!get_next_packet && !confirmed_packet_sent)
     {
         memcpy(_i2c_buffer_out, rb_buffer_tmp, I2C_TX_BUFFER_SIZE);
         mi2c_slave_polling_write(_i2c_buffer_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(32));
@@ -551,10 +566,12 @@ void app_main(void)
         // Unload any and all pending messages
         ringbuffer_unload_threadsafe();
 
+        //printf("i2c RX read attempt\n");
         mi2c_status_t read_status = mi2c_slave_polling_read(_i2c_buffer_in, I2C_RX_BUFFER_SIZE, 8);
 
         if (read_status == MI2C_OK)
         {
+            //printf("I2C RX OK\n");
             // Check command type
             switch (_i2c_buffer_in[0])
             {
@@ -563,6 +580,7 @@ void app_main(void)
                 break;
 
             case I2C_CMD_STANDARD:
+                //printf("I2C standard OK\n");
                 // Say we're OK to send haptic data
                 haptic_buffer_connected = true;
                 // ESP_LOGI(TAG, "Input RX");
@@ -588,8 +606,11 @@ void app_main(void)
                 ESP_LOGI(TAG, "Firmware Version Request RX");
                 bt_device_return_fw_version();
                 break;
-            }
-            
+            }   
+        }
+        else
+        {
+
         }
         vTaskDelay(1/portTICK_PERIOD_MS);
     }

@@ -112,8 +112,8 @@ bool ringbuffer_set(RingBuffer *rb, uint8_t *data)
     {
         // Buffer is full
         // Buffer is full, reset the buffer
-        //printf("Buffer full - RX Packet num: 0x%x\n", _current_rx_packet_num);
-        //printf("TX Packet num: 0x%x\n", _current_tx_packet_num);
+        printf("Buffer full - RX Packet num: 0x%x\n", _current_rx_packet_num);
+        printf("TX Packet num: 0x%x\n", _current_tx_packet_num);
 
         rb->head = 0;
         rb->tail = 0;
@@ -364,12 +364,8 @@ void i2c_handle_new_tx()
 {
     static uint8_t *rb_buffer = NULL;
     static uint8_t rb_buffer_tmp[I2C_TX_BUFFER_SIZE] = {0};
-    static bool get_next_packet = false;
+    static bool get_next_packet = true;
     static bool confirmed_packet_sent = false;
-
-    // Only handle this if we have the free space
-    //printf("Check i2c ready to send...\n");
-    if(!mi2c_slave_write_ready()) return;
 
     if(get_next_packet)
     {
@@ -378,8 +374,7 @@ void i2c_handle_new_tx()
         rb_buffer = ringbuffer_get(&_status_ringbuffer);
 
         if(rb_buffer!=NULL)
-        {
-            
+        {  
             memcpy(rb_buffer_tmp, rb_buffer, I2C_TX_BUFFER_SIZE);
             _current_tx_packet_num = rb_buffer_tmp[I2C_TX_COUNTER_IDX];
             get_next_packet = false;
@@ -396,7 +391,7 @@ void i2c_handle_new_tx()
         }
     }
 
-    // Send nothing if we have nothing to send
+    // Send our curent valid packet as many times as we need until we have a valid response
     if (!get_next_packet && !confirmed_packet_sent)
     {
         memcpy(_i2c_buffer_out, rb_buffer_tmp, I2C_TX_BUFFER_SIZE);
@@ -585,13 +580,6 @@ void app_main(void)
                 haptic_buffer_connected = true;
                 // ESP_LOGI(TAG, "Input RX");
                 bt_device_input(_i2c_buffer_in, false);
-                // Transmit
-                i2c_handle_new_tx();
-                break;
-            
-            case I2C_CMD_MOTION:
-                // ESP_LOGI(TAG, "Input RX");
-                bt_device_input(_i2c_buffer_in, true);
                 // Transmit
                 i2c_handle_new_tx();
                 break;

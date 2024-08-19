@@ -232,7 +232,7 @@ int util_bluetooth_init(uint8_t *mac_address)
         return -1;
     }
 
-    esp_bredr_tx_power_set(ESP_PWR_LVL_N0, ESP_PWR_LVL_P9);
+    //esp_bredr_tx_power_set(ESP_PWR_LVL_N0, ESP_PWR_LVL_P9);
 
     ESP_LOGI(TAG, "Bluedroid initializing...");
     if ((ret = esp_bluedroid_init()) != ESP_OK) 

@@ -1,4 +1,4 @@
 {
-  "changelog": "8.6.2024r2<br>-I2C comms updated for Bluetooth (required update)",
-  "fw_version": 40983
+  "changelog": "8.19.2024r2<br>-Adjustment to TX Power",
+  "fw_version": 40984
 }

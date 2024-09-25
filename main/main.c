@@ -298,35 +298,89 @@ void app_set_standard_haptic(uint8_t left, uint8_t right)
     ringbuffer_load_threadsafe(haptic_buffer);
 }
 
+// Function to generate a random MAC address and write it to the buffer
+void generate_random_mac(uint8_t *mac) {
+
+    // Generate random values for each byte of the MAC address
+    for (int i = 0; i < 6; i++) {
+        mac[i] = (uint8_t)(esp_random() % 256);
+    }
+
+    // Set the locally administered bit (bit 1 of the first byte) 
+    // and clear the multicast bit (bit 0)
+    mac[0] = (mac[0] & 0xFE) | 0x02;
+}
+
+void settings_default()
+{
+    memset(&global_loaded_settings, 0, sizeof(hoja_settings_s));
+    global_loaded_settings.magic = HOJA_MAGIC_NUM;
+
+    memset(&global_loaded_settings.paired_host_switch_mac, 0, 6);
+    generate_random_mac(&global_loaded_settings.device_mac_switch);
+
+    memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
+    generate_random_mac(&global_loaded_settings.device_mac_gamecube);
+
+    memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
+    generate_random_mac(&global_loaded_settings.device_mac_xinput);
+}
+
+void app_settings_save()
+{
+    const char* TAG = "hoja_settings_saveall";
+    nvs_handle_t my_handle;
+    esp_err_t err;
+    // Open
+    err = nvs_open(HOJA_SETTINGS_NAMESPACE, NVS_READWRITE, &my_handle);
+    if (err != ESP_OK) 
+    {
+        ESP_LOGE(TAG, "During HOJA settings save, NVS storage failed to open.");
+        return;
+    }
+
+    nvs_set_blob(my_handle, "hoja_settings", &global_loaded_settings, sizeof(hoja_settings_s));
+
+    nvs_commit(my_handle);
+    nvs_close(my_handle);
+
+    return;
+}
+
 // Send updated host MAC address so the host device can save it for later
-void app_save_host_mac()
+void app_save_host_mac(input_mode_t mode, uint8_t *address)
 {
     ESP_LOGI("app_save_host_mac", "Saving new host mac...");
-    uint8_t mac_buffer[I2C_TX_BUFFER_SIZE] = {0};
 
-    i2cinput_status_s mac_status = {
-        .cmd = I2C_STATUS_MAC_UPDATE,
-    };
+    uint8_t *write_address = NULL;
+    
+    switch(mode)
+    {
+        default:
+        case INPUT_MODE_SWPRO:
+            write_address = &global_loaded_settings.paired_host_switch_mac;
+        break;
 
-    mac_status.data[0] = global_loaded_settings.switch_host_mac[0];
-    mac_status.data[1] = global_loaded_settings.switch_host_mac[1];
-    mac_status.data[2] = global_loaded_settings.switch_host_mac[2];
-    mac_status.data[3] = global_loaded_settings.switch_host_mac[3];
-    mac_status.data[4] = global_loaded_settings.switch_host_mac[4];
-    mac_status.data[5] = global_loaded_settings.switch_host_mac[5];
+        case INPUT_MODE_GAMECUBE:   
+            write_address = &global_loaded_settings.paired_host_gamecube_mac;
+        break;
 
-    // Generate random seed
-    mac_status.rand_seed = esp_random();
+        case INPUT_MODE_XINPUT:
+            write_address = &global_loaded_settings.paired_host_xinput_mac;
+        break;
+    }
 
-    // Copy haptic_status into haptic_buffer
-    memcpy(&(mac_buffer[I2C_TX_STATUS_IDX]), &mac_status, sizeof(i2cinput_status_s));
+    if(write_address!=NULL)
+    {
+        write_address[0] = address[0];
+        write_address[1] = address[1];
+        write_address[2] = address[2];
+        write_address[3] = address[3];
+        write_address[4] = address[4];
+        write_address[5] = address[5];
 
-    uint8_t crc = crc8_compute((uint8_t *)&mac_status, sizeof(i2cinput_status_s));
-    mac_buffer[I2C_TX_CRC_IDX] = crc;
-    mac_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
-
-    ringbuffer_set(&_status_ringbuffer, mac_buffer);
-    memcpy(global_loaded_settings.paired_host_mac, global_loaded_settings.switch_host_mac, 6);
+        app_settings_save();
+    }
 }
 
 // Handle incoming input data
@@ -414,39 +468,46 @@ void bt_device_start(uint8_t *data)
         return;
     }
 
-    input_mode_t mode = data[2];
+    input_mode_t mode = data[2] & 0x7F;
 
-    global_loaded_settings.device_mac[0] = data[3];
-    global_loaded_settings.device_mac[1] = data[4];
-    global_loaded_settings.device_mac[2] = data[5];
+    // Check if we should clear our addresses
+    // to initiate a new pairing sequence
+    if(data[2] & 0x80)
+    {
+        switch(mode)
+        {
+            default:
+            case INPUT_MODE_SWPRO:
+                memset(&global_loaded_settings.paired_host_switch_mac, 0, 6);
+                generate_random_mac(&global_loaded_settings.device_mac_switch);
+            break;
 
-    global_loaded_settings.device_mac[3] = data[6];
-    global_loaded_settings.device_mac[4] = data[7];
-    global_loaded_settings.device_mac[5] = data[8];
+            case INPUT_MODE_GAMECUBE:
+                memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
+                generate_random_mac(&global_loaded_settings.device_mac_gamecube);
+            break;
 
-    // Load paired mac
-    global_loaded_settings.paired_host_mac[0] = data[9];
-    global_loaded_settings.paired_host_mac[1] = data[10];
-    global_loaded_settings.paired_host_mac[2] = data[11];
+            case INPUT_MODE_XINPUT:
+                memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
+                generate_random_mac(&global_loaded_settings.device_mac_xinput);
+            break;
+        }
 
-    global_loaded_settings.paired_host_mac[3] = data[12];
-    global_loaded_settings.paired_host_mac[4] = data[13];
-    global_loaded_settings.paired_host_mac[5] = data[14];
-
-    esp_log_buffer_hex(TAG, global_loaded_settings.paired_host_mac, 6);
+        app_settings_save();
+    }
 
     switch (mode)
     {
     default:
         break;
 
-    case INPUT_MODE_DS4:
-        break; // Disable for now
-        _bluetooth_input_cb = ds4_bt_sendinput;
-        ESP_LOGI(TAG, "DS4 BT Mode Init...");
-
-        core_bt_ds4_start();
-        break;
+    //case INPUT_MODE_DS4:
+    //    break; // Disable for now
+    //    _bluetooth_input_cb = ds4_bt_sendinput;
+    //    ESP_LOGI(TAG, "DS4 BT Mode Init...");
+//
+    //    core_bt_ds4_start();
+    //    break;
 
     case INPUT_MODE_SWPRO:
         _bluetooth_input_cb = switch_bt_sendinput;
@@ -455,11 +516,11 @@ void bt_device_start(uint8_t *data)
         core_bt_switch_start();
         break;
 
-    case INPUT_MODE_XINPUT:
-        _bluetooth_input_cb = xinput_bt_sendinput;
-        ESP_LOGI(TAG, "XInput BT Mode Init...");
-        core_bt_xinput_start();
-        break;
+    //case INPUT_MODE_XINPUT:
+    //    _bluetooth_input_cb = xinput_bt_sendinput;
+    //    ESP_LOGI(TAG, "XInput BT Mode Init...");
+    //    core_bt_xinput_start();
+    //    break;
     }
 }
 
@@ -543,14 +604,55 @@ void app_main(void)
     // Create mutex
     main_receive_queue = xQueueCreate(32, sizeof(packed_i2c_msg));
 
-    // Initialize flash storage
-    ret = nvs_flash_init();
-    if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+    // NVS Storage Load
     {
-        ESP_ERROR_CHECK(nvs_flash_erase());
+        // Load settings or create
+        nvs_handle_t my_handle;
+
+        // Initialize flash storage
         ret = nvs_flash_init();
+        if (ret == ESP_ERR_NVS_NO_FREE_PAGES || ret == ESP_ERR_NVS_NEW_VERSION_FOUND)
+        {
+            ESP_ERROR_CHECK(nvs_flash_erase());
+            ret = nvs_flash_init();
+        }
+        ESP_ERROR_CHECK(ret);
+
+        ret = nvs_open(HOJA_SETTINGS_NAMESPACE, NVS_READWRITE, &my_handle);
+        if(ret != ESP_OK)
+        {
+            ESP_LOGE(TAG, "During HOJA load settings, NVS Open failed.");
+            return;
+        }
+
+        size_t required_size = 0;
+        ret = nvs_get_blob(my_handle, "hoja_settings", NULL, &required_size);
+        if(required_size>0)
+        {
+            ret = nvs_get_blob(my_handle, "hoja_settings", &global_loaded_settings, &required_size);
+            if(global_loaded_settings.magic != HOJA_MAGIC_NUM)
+            {
+                settings_default();
+                nvs_set_blob(my_handle, "hoja_settings", &global_loaded_settings, sizeof(hoja_settings_s));
+                nvs_commit(my_handle);
+                nvs_close(my_handle);
+                ESP_LOGI(TAG, "HOJA config set to default OK.");
+            }
+            else
+            {
+                ESP_LOGI(TAG, "HOJA config loaded OK.");
+                nvs_close(my_handle);
+            }
+        }
+        else
+        {
+            settings_default();
+            nvs_set_blob(my_handle, "hoja_settings", &global_loaded_settings, sizeof(hoja_settings_s));
+            nvs_commit(my_handle);
+            nvs_close(my_handle);
+            ESP_LOGI(TAG, "HOJA config set to default OK.");
+        }
     }
-    ESP_ERROR_CHECK(ret);
 
     // Set up I2C slave device with custom driver
     mi2c_slave_setup();

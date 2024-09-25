@@ -134,13 +134,13 @@ void ds4_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             
 
             // Set host bluetooth address
-            memcpy(&global_loaded_settings.switch_host_mac[0], &param->auth_cmpl.bda[0], ESP_BD_ADDR_LEN);
+            //memcpy(&global_loaded_settings.switch_host_mac[0], &param->auth_cmpl.bda[0], ESP_BD_ADDR_LEN);
 
             // We set pairing address here
-            if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
-            {
-                app_save_host_mac();
-            }
+            //if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
+            //{
+            //    app_save_host_mac();
+            //}
 
             //ns_controller_input_task_set(NS_REPORT_MODE_BLANK);
         }
@@ -192,17 +192,17 @@ void ds4_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void 
             if (param->start.status == ESP_OK)
             {
                 ESP_LOGI(TAG, "START OK");
-                if(util_bt_get_paired())
-                {
-                    ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
-                    esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                    util_bluetooth_connect();
-                }
-                else
-                {
-                    ESP_LOGI(TAG, "Setting to connectable, discoverable.");
-                    esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-                }
+                //if(util_bt_get_paired())
+                //{
+                //    ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
+                //    esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
+                //    util_bluetooth_connect();
+                //}
+                //else
+                //{
+                //    ESP_LOGI(TAG, "Setting to connectable, discoverable.");
+                //    esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
+                //}
             }
             break;
         }
@@ -305,21 +305,10 @@ int core_bt_ds4_start() {
     esp_err_t ret;
     int err;
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac);
+    //err = util_bluetooth_init(global_loaded_settings.device_mac);
 
     bool paired = false;
 
-    for (uint8_t i = 0; i < 6; i++)
-    {
-        if (global_loaded_settings.paired_host_mac[i] > 0)
-            paired = true;
-    }
-
-    if(paired)
-    {
-        ESP_LOGI(TAG, "Paired host found, setting paired in util.");
-        util_bt_set_paired(true, global_loaded_settings.paired_host_mac);
-    }
 
     // Starting bt mode
     err = util_bluetooth_register_app(&ds4_app_params, &ds4_hidd_config);
@@ -328,7 +317,7 @@ int core_bt_ds4_start() {
         vTaskDelay(1500 / portTICK_PERIOD_MS);
 
         // Set host bluetooth address
-        memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
+        //memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
     }
 
     return 1;

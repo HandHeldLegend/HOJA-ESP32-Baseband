@@ -2,6 +2,9 @@
 #define HOJA_INCLUDES_H
 
 #define HOJA_BASEBAND_VERSION 0xA018
+#define HOJA_MAGIC_NUM 0x83FD
+#define HOJA_SETTINGS_NAMESPACE "hsettings"
+
 #include "hoja_types.h"
 #include <string.h>
 #include <inttypes.h>

@@ -7,17 +7,16 @@ static volatile bool        _hid_connected = false;
 static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
 static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
 static volatile bool        _sniff = true;
-static volatile bool        _switch_paired = false;
 
 interval_s _ns_interval = {0};
 
-void ns_reset_report_spacer()
+void gc_reset_report_spacer()
 {
     uint32_t timestamp = get_timestamp_us();
     interval_resettable_run(timestamp, _delay_time_us, true, &_ns_interval);
 }
 
-void ns_send_check_blocking()
+void gc_send_check_blocking()
 {
     bool ok_to_send = false;
     uint32_t timestamp = 0;
@@ -43,7 +42,7 @@ void ns_send_check_blocking()
     }
 }
 
-bool ns_send_check_nonblocking()
+bool gc_send_check_nonblocking()
 {
     uint32_t timestamp = get_timestamp_us();
     return interval_run(timestamp, _delay_time_us, &_ns_interval);
@@ -95,98 +94,20 @@ typedef struct
     bool hid_connected;
 } ns_event_s;
 
-QueueHandle_t ns_event_queue;
+QueueHandle_t gc_event_queue;
 
-TaskHandle_t _switch_bt_task_handle = NULL;
-ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
+TaskHandle_t _gamecube_bt_task_handle = NULL;
 
-sw_input_s _switch_input_data = {.ls_x = 2047, .ls_y = 2047, .rs_x = 2047, .rs_y = 2047};
+gc_input_s _gc_input_data = {.left_x = 128, .left_y = 128, .right_x = 128, .right_y = 128};
 
-void _switch_bt_task_standard(void *parameters);
-void _switch_bt_task_empty(void *parameters);
-void _switch_bt_task_short(void *parameters);
-void ns_controller_input_task_set(ns_report_mode_t report_mode_type);
+void _gamecube_bt_task_standard(void *parameters);
 
-void switch_bt_end_task()
+void gc_bt_end_task()
 {
-    if(_switch_bt_task_handle != NULL)
+    if(_gamecube_bt_task_handle != NULL)
     {
-        vTaskDelete(_switch_bt_task_handle);
+        vTaskDelete(_gamecube_bt_task_handle);
     }
-}
-
-void ns_controller_setinputreportmode(uint8_t report_mode)
-{
-    return; // Debug do nothing
-    char *TAG = "ns_controller_setinputreportmode";
-
-    ESP_LOGI(TAG, "Switching to input mode: %04x", report_mode);
-    switch (report_mode)
-    {
-    // Standard
-    case 0x30:
-        ESP_LOGI(TAG, "Setting standard report mode.");
-        ns_controller_input_task_set(NS_REPORT_MODE_FULL);
-
-        break;
-
-    // SimpleHID. Data pushes only on button press/release
-    case 0x3F:
-        ESP_LOGI(TAG, "Setting short report mode.");
-        //ns_controller_input_task_set(NS_REPORT_MODE_SIMPLE);
-        break;
-
-    // NFC/IR
-    case 0x31:
-    case 0x00 ... 0x03:
-    default:
-        // ERROR
-        break;
-    }
-}
-
-void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
-{
-    const char *TAG = "ns_controller_input_task_set";
-
-    ns_event_s event = {.event_id = NS_EVENT_REPORT_MODE_CHANGE};
-
-    switch (report_mode_type)
-    {
-    default:
-        ESP_LOGI(TAG, "Unhandled input task: %d", report_mode_type);
-    break;
-
-    case NS_REPORT_MODE_BLANK:
-        ESP_LOGI(TAG, "Set Report Mode BLANK");
-        event.report_mode = NS_REPORT_MODE_BLANK;
-
-        if(_switch_bt_task_handle==NULL)
-        {
-            xTaskCreatePinnedToCore(_switch_bt_task_standard,
-                                "Standard Send Task", 2048,
-                                NULL, 0, &_switch_bt_task_handle, 0);
-        }
-        
-        break;
-
-    /*case NS_REPORT_MODE_SIMPLE:
-        ESP_LOGI(TAG, "Start input SIMPLE task...");
-
-        // Set the internal reporting mode.
-        _switch_report_mode = NS_REPORT_MODE_SIMPLE;
-        xTaskCreatePinnedToCore(_switch_bt_task_short,
-                                "Standard Send Task", 2048,
-                                NULL, 0, &_switch_bt_task_handle, 0);
-        break;*/
-
-    case NS_REPORT_MODE_FULL:
-        ESP_LOGI(TAG, "Set Report Mode FULL");
-        event.report_mode = NS_REPORT_MODE_FULL;
-        break;
-    }
-
-    xQueueSend(ns_event_queue, &event, 0);
 }
 
 uint32_t interval_to_ticks(uint16_t interval)
@@ -201,66 +122,10 @@ uint32_t interval_to_us(uint16_t interval)
     return (uint32_t) interval * 625;
 }
 
-void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
-{
-    // Ignore all of this for debug
-    return;
-    if(sniff)
-    {
-        _sniff = true;
-        _delay_time_us = rx_lat*1000;//interval_to_us(rx_lat);
-        printf("Delay (ms): %d\n", rx_lat);
-    }
-    else
-    {
-        _sniff = false;
-        _delay_time_us = 8000;
-        printf("UnSniff: \n");
-    }
-    ns_reset_report_spacer();
-}
-
-/* HCI mode defenitions */
-#define HCI_MODE_ACTIVE                 0x00
-#define HCI_MODE_HOLD                   0x01
-#define HCI_MODE_SNIFF                  0x02
-#define HCI_MODE_PARK                   0x03
-
-void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
-{
-    if (!succeeded) {
-        printf("HCI mode change event failed\n");
-        return;
-    }
-
-    switch (mode) {
-        case HCI_MODE_ACTIVE:
-            printf("Connection handle 0x%04x is in ACTIVE mode.\n", hci_handle);
-            // Handle ACTIVE mode
-            _sniff = false;
-            _delay_time_us = 8000;
-            break;
-
-        case HCI_MODE_SNIFF:
-            printf("Connection handle 0x%04x is in SNIFF mode. Interval: %d ms\n", hci_handle, interval);
-            // Handle SNIFF mode
-            
-            _sniff = true;
-            _delay_time_us = interval*1000;//interval_to_us(interval);
-            break;
-
-        default:
-            printf("Connection handle 0x%04x is in an unknown mode (%d). Interval: %d slots\n", hci_handle, mode, interval);
-            break;
-    }
-    //vTaskDelay(16/portTICK_PERIOD_MS);
-    ns_reset_report_spacer();
-}
-
 // SWITCH BTC GAP Event Callback
-void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
+void gc_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
-    const char *TAG = "switch_bt_gap_cb";
+    const char *TAG = "gc_bt_gap_cb";
     switch (event)
     {
     case ESP_BT_GAP_DISC_RES_EVT:
@@ -284,30 +149,30 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         ESP_LOGI(TAG, "ACL Connect Complete.");
 
         // Start input loop task
-        if(_switch_bt_task_handle==NULL)
+        if(_gamecube_bt_task_handle==NULL)
         {
-            xTaskCreatePinnedToCore(_switch_bt_task_standard,
-                                "Standard Send Task", 4048,
-                                NULL, 0, &_switch_bt_task_handle, 0);
+            xTaskCreatePinnedToCore(_gamecube_bt_task_standard,
+                                "GameCube Send Task", 4048,
+                                NULL, 0, &_gamecube_bt_task_handle, 0);
         }
         break;
 
     case ESP_BT_GAP_ACL_DISCONN_CMPL_STAT_EVT:
         ESP_LOGI(TAG, "ACL Disconnect Complete.");
         
-        if(_switch_bt_task_handle!=NULL)
+        if(_gamecube_bt_task_handle!=NULL)
         {
-            vTaskDelete(_switch_bt_task_handle);
-            _switch_bt_task_handle = NULL;
+            vTaskDelete(_gamecube_bt_task_handle);
+            _gamecube_bt_task_handle = NULL;
         }
 
         app_set_connected_status(0);
         
-        if(_switch_paired)
+        if(util_bt_get_paired())
         {
             ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
             esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-            util_bluetooth_connect(global_loaded_settings.paired_host_switch_mac);
+            util_bluetooth_connect();
         }
         else
         {
@@ -324,10 +189,17 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             ESP_LOGI(TAG, "authentication success: %s", param->auth_cmpl.device_name);
             //esp_log_buffer_hex(TAG, param->auth_cmpl.bda, ESP_BD_ADDR_LEN);
             
-            if(!_switch_paired)
+
+            // Set host bluetooth address
+            memcpy(&global_loaded_settings.switch_host_mac[0], &param->auth_cmpl.bda[0], ESP_BD_ADDR_LEN);
+
+            // We set pairing address here
+            if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
             {
-                app_save_host_mac(INPUT_MODE_SWPRO, &param->auth_cmpl.bda[0]);
+                app_save_host_mac();
             }
+
+            //ns_controller_input_task_set(NS_REPORT_MODE_BLANK);
         }
         else
         {
@@ -385,11 +257,11 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->start.status == ESP_OK)
             {
                 ESP_LOGI(TAG, "START OK");
-                if(_switch_paired)
+                if(util_bt_get_paired())
                 {
                     ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
                     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                    util_bluetooth_connect(&global_loaded_settings.paired_host_switch_mac);
+                    util_bluetooth_connect();
                 }
                 else
                 {
@@ -501,23 +373,31 @@ int core_bt_switch_start(void)
     // Convert calibration data
     switch_analog_calibration_init();
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac_switch);
+    err = util_bluetooth_init(global_loaded_settings.device_mac);
 
-    _switch_paired = false;
+    bool paired = false;
 
     for (uint8_t i = 0; i < 6; i++)
     {
-        if (global_loaded_settings.paired_host_switch_mac[i] > 0)
-            _switch_paired = true;
+        if (global_loaded_settings.paired_host_mac[i] > 0)
+            paired = true;
     }
 
-    if(_switch_paired)
+    if(paired)
     {
-        ESP_LOGI(TAG, "Paired host found");
+        ESP_LOGI(TAG, "Paired host found, setting paired in util.");
+        util_bt_set_paired(true, global_loaded_settings.paired_host_mac);
     }
 
     // Starting bt mode
     err = util_bluetooth_register_app(&switch_app_params, &switch_hidd_config);
+    if (err == 1)
+    {
+        vTaskDelay(1500 / portTICK_PERIOD_MS);
+
+        // Set host bluetooth address
+        memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
+    }
 
     return 1;
 }
@@ -544,21 +424,21 @@ void ns_savepairing(uint8_t *host_addr)
 
     ESP_LOGI(TAG, "Pairing to Nintendo Switch.");
 
-    app_save_host_mac(INPUT_MODE_SWPRO, host_addr);
+    // Copy host address into settings memory.
+    memcpy(global_loaded_settings.switch_host_mac, host_addr, sizeof(global_loaded_settings.switch_host_mac));
 
     // Save all settings send pairing info to RP2040
 }
 
-void _switch_bt_task_standard(void *parameters)
+void _gc_bt_task_standard(void *parameters)
 {
-    ESP_LOGI("_switch_bt_task_standard", "Starting input loop task...");
+    ESP_LOGI("_gc_bt_task_standard", "Starting input loop task...");
 
     static ns_report_mode_t _report_mode = NS_REPORT_MODE_FULL;
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
     _delay_time_us = DEFAULT_US_DELAY; 
-    _sniff = true;
 
     for (;;)
     {
@@ -567,22 +447,10 @@ void _switch_bt_task_standard(void *parameters)
 
         if(_hid_connected)
         {
-            if(ns_send_check_nonblocking())
+            if(gc_send_check_nonblocking())
             {
-                if((_report_mode == NS_REPORT_MODE_FULL))
-                {
-                    ns_report_clear(_full_buffer, 64);
-                    ns_report_setinputreport_full(_full_buffer, &_switch_input_data);
-                    ns_report_settimer(_full_buffer);
-                    ns_report_setbattconn(_full_buffer);
-                    //_full_buffer[12] = 0x70;
-                    if(_hid_connected)
-                        esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
-                }
-                else
-                {
-                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x00, 1, tmp);
-                }
+                if(_hid_connected)
+                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
             }
         }
         else
@@ -594,7 +462,7 @@ void _switch_bt_task_standard(void *parameters)
 
 #define ANALOG_DIGITAL_THRESH 650
 
-void switch_bt_sendinput(i2cinput_input_s *input)
+void gamecube_bt_sendinput(i2cinput_input_s *input)
 {
     _switch_input_data.ls_x = input->lx;
     _switch_input_data.ls_y = input->ly;

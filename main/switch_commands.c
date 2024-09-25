@@ -113,12 +113,12 @@ void ns_report_sub_setdevinfo(uint8_t *buffer)
   buffer[17] = 0x02; // Controller ID secondary
 
   /*_switch_input_buffer[18-23] = MAC ADDRESS;*/
-  buffer[18] = global_loaded_settings.device_mac[0];
-  buffer[19] = global_loaded_settings.device_mac[1];
-  buffer[20] = global_loaded_settings.device_mac[2];
-  buffer[21] = global_loaded_settings.device_mac[3];
-  buffer[22] = global_loaded_settings.device_mac[4];
-  buffer[23] = global_loaded_settings.device_mac[5];
+  buffer[18] = global_loaded_settings.device_mac_switch[0];
+  buffer[19] = global_loaded_settings.device_mac_switch[1];
+  buffer[20] = global_loaded_settings.device_mac_switch[2];
+  buffer[21] = global_loaded_settings.device_mac_switch[3];
+  buffer[22] = global_loaded_settings.device_mac_switch[4];
+  buffer[23] = global_loaded_settings.device_mac_switch[5];
 
   buffer[24] = 0x00;
   buffer[25] = 0x02; // It's 2 now? Ok.

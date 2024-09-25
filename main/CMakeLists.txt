@@ -1,4 +1,4 @@
-#set(COMPONENT_SRCS "mitch_i2c.c" "switch_haptics.c" "interval.c" "core_bt_ds4.c" "switch_analog.c" "switch_spi.c" "switch_commands.c" "core_bt_switch.c" "main.c")
+#set(COMPONENT_SRCS "core_bt_gamecube.c" "mitch_i2c.c" "switch_haptics.c" "interval.c" "core_bt_ds4.c" "switch_analog.c" "switch_spi.c" "switch_commands.c" "core_bt_switch.c" "main.c")
 #set(COMPONENT_ADD_INCLUDEDIRS "")
 
 #register_component()

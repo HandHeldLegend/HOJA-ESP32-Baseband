@@ -26,7 +26,7 @@ extern const uint8_t xinput_hid_report_descriptor[XINPUT_HID_REPORT_MAP_LEN];
 extern const uint8_t procon_hid_descriptor[PROCON_HID_REPORT_MAP_LEN];
 extern const uint8_t procon_hid_descriptor_short[PROCON_SHORT_HID_REPORT_MAP_LEN];
 
-#define GC_HID_REPORT_MAP_LEN 133
-extern const uint8_t gc_hid_report_descriptor[GC_HID_REPORT_MAP_LEN];
+#define GC_HID_REPORT_MAP_LEN 145
+extern const uint8_t gc_hid_report_descriptor[];
 
 #endif

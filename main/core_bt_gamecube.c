@@ -1,4 +1,4 @@
-#include "core_bt_switch.h"
+#include "core_bt_gamecube.h"
 #include "esp_log.h"
 
 #define DEFAULT_TICK_DELAY (8/portTICK_PERIOD_MS)
@@ -7,13 +7,14 @@ static volatile bool        _hid_connected = false;
 static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
 static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
 static volatile bool        _sniff = true;
+static volatile bool        _gamecube_paired = false;
 
-interval_s _ns_interval = {0};
+interval_s _report_interval = {0};
 
 void gc_reset_report_spacer()
 {
     uint32_t timestamp = get_timestamp_us();
-    interval_resettable_run(timestamp, _delay_time_us, true, &_ns_interval);
+    interval_resettable_run(timestamp, _delay_time_us, true, &_report_interval);
 }
 
 void gc_send_check_blocking()
@@ -24,7 +25,7 @@ void gc_send_check_blocking()
     while(!ok_to_send)
     {
         timestamp = get_timestamp_us();
-        if(interval_run(timestamp, _delay_time_us, &_ns_interval))
+        if(interval_run(timestamp, _delay_time_us, &_report_interval))
         {
             ok_to_send = true;
         }
@@ -45,60 +46,12 @@ void gc_send_check_blocking()
 bool gc_send_check_nonblocking()
 {
     uint32_t timestamp = get_timestamp_us();
-    return interval_run(timestamp, _delay_time_us, &_ns_interval);
+    return interval_run(timestamp, _delay_time_us, &_report_interval);
 }
-
-/**
- * @brief NS Core Report mode enums
- */
-typedef enum
-{
-    NS_REPORT_MODE_BLANK,
-    NS_REPORT_MODE_SIMPLE,
-    NS_REPORT_MODE_FULL,
-    NS_REPORT_MODE_MAX,
-} ns_report_mode_t;
-
-/**
- * @brief NS Core power handle state types
- */
-typedef enum
-{
-    NS_POWER_AWAKE,
-    NS_POWER_SLEEP,
-} ns_power_handle_t;
-
-/**
- * @brief NS Core Status
- */
-typedef enum
-{
-    NS_STATUS_IDLE,
-    NS_STATUS_SUBCORESET,
-    NS_STATUS_RUNNING,
-} ns_core_status_t;
-
-typedef enum
-{
-    NS_EVENT_HID_CHANGE,
-    NS_EVENT_REPORT_MODE_CHANGE,
-    NS_EVENT_SET_SNIFF,
-    NS_EVENT_SET_AWAKE,
-} ns_event_t;
-
-typedef struct
-{
-    ns_event_t event_id;
-    ns_report_mode_t report_mode;
-    uint16_t poll_interval;
-    bool hid_connected;
-} ns_event_s;
-
-QueueHandle_t gc_event_queue;
 
 TaskHandle_t _gamecube_bt_task_handle = NULL;
 
-gc_input_s _gc_input_data = {.left_x = 128, .left_y = 128, .right_x = 128, .right_y = 128};
+gc_input_s _gamecube_input_data = {.left_x = 128, .left_y = 128, .right_x = 128, .right_y = 128};
 
 void _gamecube_bt_task_standard(void *parameters);
 
@@ -110,20 +63,20 @@ void gc_bt_end_task()
     }
 }
 
-uint32_t interval_to_ticks(uint16_t interval)
+uint32_t gc_interval_to_ticks(uint16_t interval)
 {
     float num = 0.625f*(float)interval;
     uint32_t out = (uint32_t) num / portTICK_PERIOD_MS;
     return out;
 }
 
-uint32_t interval_to_us(uint16_t interval)
+uint32_t gc_interval_to_us(uint16_t interval)
 {
     return (uint32_t) interval * 625;
 }
 
-// SWITCH BTC GAP Event Callback
-void gc_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
+// GameCube BTC GAP Event Callback
+void gamecube_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 {
     const char *TAG = "gc_bt_gap_cb";
     switch (event)
@@ -168,11 +121,11 @@ void gc_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 
         app_set_connected_status(0);
         
-        if(util_bt_get_paired())
+        if(_gamecube_paired)
         {
             ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
             esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-            util_bluetooth_connect();
+            util_bluetooth_connect(global_loaded_settings.paired_host_gamecube_mac);
         }
         else
         {
@@ -188,18 +141,12 @@ void gc_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         {
             ESP_LOGI(TAG, "authentication success: %s", param->auth_cmpl.device_name);
             //esp_log_buffer_hex(TAG, param->auth_cmpl.bda, ESP_BD_ADDR_LEN);
-            
 
-            // Set host bluetooth address
-            memcpy(&global_loaded_settings.switch_host_mac[0], &param->auth_cmpl.bda[0], ESP_BD_ADDR_LEN);
-
-            // We set pairing address here
-            if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
+            if(!_gamecube_paired)
             {
-                app_save_host_mac();
+                _gamecube_paired = true;
+                app_save_host_mac(INPUT_MODE_GAMECUBE, &param->auth_cmpl.bda[0]);
             }
-
-            //ns_controller_input_task_set(NS_REPORT_MODE_BLANK);
         }
         else
         {
@@ -244,7 +191,7 @@ void gc_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 }
 
 // Callbacks for HID report events
-void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
+void gamecube_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
 {
     esp_hidd_event_t event = (esp_hidd_event_t)id;
     esp_hidd_event_data_t *param = (esp_hidd_event_data_t *)event_data;
@@ -257,11 +204,11 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->start.status == ESP_OK)
             {
                 ESP_LOGI(TAG, "START OK");
-                if(util_bt_get_paired())
+                if(_gamecube_paired)
                 {
                     ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
                     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                    util_bluetooth_connect();
+                    util_bluetooth_connect(&global_loaded_settings.paired_host_gamecube_mac);
                 }
                 else
                 {
@@ -276,9 +223,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->connect.status == ESP_OK)
             {
-                ns_event_s connect_event = {.event_id = NS_EVENT_HID_CHANGE, .hid_connected = true};
                 _hid_connected = true;
-                //xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "CONNECT OK");
 
             }
@@ -297,9 +242,11 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
 
         case ESP_HIDD_OUTPUT_EVENT:
         {
+            // TODO
+
             //ESP_LOGI(TAG, "OUTPUT[%u]: %8s ID: %2u, Len: %d, Data:", param->output.map_index, esp_hid_usage_str(param->output.usage), param->output.report_id, param->output.length);
             //ESP_LOG_BUFFER_HEX(TAG, param->output.data, param->output.length);
-            ns_report_handler(param->output.report_id, param->output.data, param->output.length);
+            //ns_report_handler(param->output.report_id, param->output.data, param->output.length);
             break;
         }
 
@@ -315,8 +262,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->disconnect.status == ESP_OK)
             {
                 _hid_connected = false;
-                ns_reset_report_spacer();
-                //xQueueSend(ns_event_queue, &connect_event, 0);
+                gc_reset_report_spacer();
                 ESP_LOGI(TAG, "DISCONNECT OK");
             }
             else
@@ -337,73 +283,62 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
     }
 }
 
-// Switch HID report maps
-esp_hid_raw_report_map_t switch_report_maps[1] = {
+// GameCube HID report maps
+esp_hid_raw_report_map_t gamecube_report_maps[1] = {
     {
-        .data = procon_hid_descriptor,
-        .len = (uint16_t)PROCON_HID_REPORT_MAP_LEN,
+        .data = gc_hid_report_descriptor,
+        .len = (uint16_t)GC_HID_REPORT_MAP_LEN,
     }};
 
 // Bluetooth App setup data
-util_bt_app_params_s switch_app_params = {
-    .hidd_cb = switch_bt_hidd_cb,
-    .gap_cb = switch_bt_gap_cb,
+util_bt_app_params_s gamecube_app_params = {
+    .hidd_cb = gamecube_bt_hidd_cb,
+    .gap_cb = gamecube_bt_gap_cb,
     .bt_mode = ESP_BT_MODE_CLASSIC_BT,
     .appearance = ESP_HID_APPEARANCE_GAMEPAD,
 };
 
-esp_hid_device_config_t switch_hidd_config = {
+esp_hid_device_config_t gamecube_hidd_config = {
     .vendor_id = HID_VEND_NSPRO,
-    .product_id = HID_PROD_NSPRO,
+    .product_id = HID_PROD_GCA,
     .version = 0x0100,
-    .device_name = "Pro Controller",
-    .manufacturer_name = "Nintendo",
+    .device_name = "GC Ultimate Controller",
+    .manufacturer_name = "HHL",
     .serial_number = "000000",
-    .report_maps = switch_report_maps,
+    .report_maps = gamecube_report_maps,
     .report_maps_len = 1,
 };
 
-// Attempt start of Nintendo Switch controller core
-int core_bt_switch_start(void)
+// Attempt start of GameCube controller core
+int core_bt_gamecube_start(void)
 {
     const char *TAG = "core_bt_switch_start";
     esp_err_t ret;
     int err;
 
-    // Convert calibration data
-    switch_analog_calibration_init();
+    err = util_bluetooth_init(global_loaded_settings.device_mac_gamecube);
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac);
-
-    bool paired = false;
+    _gamecube_paired = false;
 
     for (uint8_t i = 0; i < 6; i++)
     {
-        if (global_loaded_settings.paired_host_mac[i] > 0)
-            paired = true;
+        if (global_loaded_settings.paired_host_gamecube_mac[i] > 0)
+            _gamecube_paired = true;
     }
 
-    if(paired)
+    if(_gamecube_paired)
     {
-        ESP_LOGI(TAG, "Paired host found, setting paired in util.");
-        util_bt_set_paired(true, global_loaded_settings.paired_host_mac);
+        ESP_LOGI(TAG, "Paired host found for GC");
     }
 
     // Starting bt mode
-    err = util_bluetooth_register_app(&switch_app_params, &switch_hidd_config);
-    if (err == 1)
-    {
-        vTaskDelay(1500 / portTICK_PERIOD_MS);
-
-        // Set host bluetooth address
-        memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
-    }
+    err = util_bluetooth_register_app(&gamecube_app_params, &gamecube_hidd_config);
 
     return 1;
 }
 
 // Stop Nintendo Switch controller core
-void core_bt_switch_stop(void)
+void core_bt_gamecube_stop(void)
 {
     const char *TAG = "core_ns_stop";
     // ns_connected = false;
@@ -412,9 +347,9 @@ void core_bt_switch_stop(void)
 }
 
 // Save Nintendo Switch bluetooth pairing
-void ns_savepairing(uint8_t *host_addr)
+void gamecube_savepairing(uint8_t *host_addr)
 {
-    const char *TAG = "ns_savepairing";
+    const char *TAG = "gamecube_savepairing";
 
     if (host_addr == NULL)
     {
@@ -422,19 +357,14 @@ void ns_savepairing(uint8_t *host_addr)
         return;
     }
 
-    ESP_LOGI(TAG, "Pairing to Nintendo Switch.");
+    ESP_LOGI(TAG, "Pairing to GameCube Host.");
 
-    // Copy host address into settings memory.
-    memcpy(global_loaded_settings.switch_host_mac, host_addr, sizeof(global_loaded_settings.switch_host_mac));
-
-    // Save all settings send pairing info to RP2040
+    app_save_host_mac(INPUT_MODE_GAMECUBE, host_addr);
 }
 
-void _gc_bt_task_standard(void *parameters)
+void _gamecube_bt_task_standard(void *parameters)
 {
-    ESP_LOGI("_gc_bt_task_standard", "Starting input loop task...");
-
-    static ns_report_mode_t _report_mode = NS_REPORT_MODE_FULL;
+    ESP_LOGI("_gamecube_bt_task_standard", "Starting input loop task...");
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
@@ -443,14 +373,14 @@ void _gc_bt_task_standard(void *parameters)
     for (;;)
     {
         static uint8_t _full_buffer[64] = {0};
-        uint8_t tmp[64] = {0x00, 0x00};
+        memcpy(_full_buffer, &_gamecube_input_data, sizeof(_gamecube_input_data));
 
         if(_hid_connected)
         {
             if(gc_send_check_nonblocking())
             {
                 if(_hid_connected)
-                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x30, SWITCH_BT_REPORT_SIZE, _full_buffer);
+                    esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x01, GAMECUBE_BT_REPORT_SIZE, _full_buffer);
             }
         }
         else
@@ -460,36 +390,18 @@ void _gc_bt_task_standard(void *parameters)
     }
 }
 
-#define ANALOG_DIGITAL_THRESH 650
-
 void gamecube_bt_sendinput(i2cinput_input_s *input)
 {
-    _switch_input_data.ls_x = input->lx;
-    _switch_input_data.ls_y = input->ly;
+    _gamecube_input_data.left_x = input->lx>>4;
+    _gamecube_input_data.left_y = input->ly>>4;
 
-    _switch_input_data.rs_x = input->rx;
-    _switch_input_data.rs_y = input->ry;
+    _gamecube_input_data.right_x = input->rx>>4;
+    _gamecube_input_data.right_y = input->ry>>4;
 
-    _switch_input_data.b_a = input->button_a;
-    _switch_input_data.b_b = input->button_b;
-    _switch_input_data.b_x = input->button_x;
-    _switch_input_data.b_y = input->button_y;
+    _gamecube_input_data.buttons1.a = input->button_a;
+    _gamecube_input_data.buttons1.b = input->button_b;
+    _gamecube_input_data.buttons1.x = input->button_x;
+    _gamecube_input_data.buttons1.y = input->button_y;
 
-    _switch_input_data.d_down = input->dpad_down;
-    _switch_input_data.d_left = input->dpad_left;
-    _switch_input_data.d_right = input->dpad_right;
-    _switch_input_data.d_up = input->dpad_up;
-
-    _switch_input_data.b_capture = input->button_capture;
-    _switch_input_data.b_home = input->button_home;
-    _switch_input_data.b_minus = input->button_minus;
-    _switch_input_data.b_plus = input->button_plus;
-
-    _switch_input_data.t_l = input->trigger_l;
-    _switch_input_data.t_r = input->trigger_r;
-    _switch_input_data.t_zl = ((input->lt >= ANALOG_DIGITAL_THRESH) ? 1 : 0) | input->trigger_zl;
-    _switch_input_data.t_zr = ((input->rt >= ANALOG_DIGITAL_THRESH) ? 1 : 0) | input->trigger_zr;
-
-    _switch_input_data.sb_left = input->button_stick_left;
-    _switch_input_data.sb_right = input->button_stick_right;
+    // Need DPAD implementation
 }

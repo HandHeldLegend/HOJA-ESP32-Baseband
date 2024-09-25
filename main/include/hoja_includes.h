@@ -137,6 +137,7 @@ typedef struct
 
 #include "core_bt_xinput.h"
 #include "core_bt_switch.h"
+#include "core_bt_gamecube.h"
 #include "core_bt_ds4.h"
 #include "util_bt_hid.h"
 

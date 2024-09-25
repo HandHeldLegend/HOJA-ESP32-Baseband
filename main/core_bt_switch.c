@@ -326,6 +326,7 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             
             if(!_switch_paired)
             {
+                _switch_paired = true;
                 app_save_host_mac(INPUT_MODE_SWPRO, &param->auth_cmpl.bda[0]);
             }
         }
@@ -338,30 +339,7 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 
     case ESP_BT_GAP_MODE_CHG_EVT:
     {
-        // This is critical for Nintendo Switch to act upon.
-        // If power mode is 0, there should be NO packets sent from the controller until
-        // another power mode is initiated by the Nintendo Switch console.
-        /*
-        ns_event_s event = {.event_id = NS_EVENT_INTERVAL_CHANGE};
-
-        if ((!_hcif_report_interval && !_hcif_report_mode))
-        {   
-            // set interval to sniff interval
-            event.poll_interval = 0;
-            //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
-        }
-        else
-        {
-            if(_hcif_report_mode == 2)
-            {   
-                ESP_LOGI(TAG, "Set Report Interval and non-idle: %d", _hcif_report_interval);
-                event.poll_interval = _hcif_report_interval;
-            }
-        }
-
-        xQueueSend(ns_event_queue, &event, 0);*/
-        //ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
-
+        // Depreciated, not needed I guess
         break;
     }
 
@@ -444,7 +422,6 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             {
                 _hid_connected = false;
                 ns_reset_report_spacer();
-                //xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "DISCONNECT OK");
             }
             else
@@ -545,8 +522,6 @@ void ns_savepairing(uint8_t *host_addr)
     ESP_LOGI(TAG, "Pairing to Nintendo Switch.");
 
     app_save_host_mac(INPUT_MODE_SWPRO, host_addr);
-
-    // Save all settings send pairing info to RP2040
 }
 
 void _switch_bt_task_standard(void *parameters)

@@ -26,6 +26,8 @@
 i2c_dev_t *i2c_dev = &I2C0;
 portMUX_TYPE spinlock = portMUX_INITIALIZER_UNLOCKED;
 
+#define portMAX_DELAY ( TickType_t ) ULONG_MAX
+
 #define I2C_RAM_BASE (0x3ff53000 + 0x100)
 
 intr_handle_t intr_handle; /*!< I2C interrupt handle*/

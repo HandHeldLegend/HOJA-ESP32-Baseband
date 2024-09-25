@@ -482,6 +482,7 @@ void bt_device_start(uint8_t *data)
                 generate_random_mac(&global_loaded_settings.device_mac_switch);
             break;
 
+            case INPUT_MODE_GCUSB:
             case INPUT_MODE_GAMECUBE:
                 memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
                 generate_random_mac(&global_loaded_settings.device_mac_gamecube);
@@ -514,6 +515,14 @@ void bt_device_start(uint8_t *data)
         ESP_LOGI(TAG, "Switch BT Mode Init...");
 
         core_bt_switch_start();
+        break;
+
+    case INPUT_MODE_GCUSB:
+    case INPUT_MODE_GAMECUBE:
+        _bluetooth_input_cb = gamecube_bt_sendinput;
+        ESP_LOGI(TAG, "GameCube BT Mode Init...");
+
+        core_bt_gamecube_start();
         break;
 
     //case INPUT_MODE_XINPUT:

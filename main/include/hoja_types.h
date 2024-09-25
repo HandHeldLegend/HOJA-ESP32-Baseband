@@ -281,7 +281,7 @@ typedef struct
 } __attribute__ ((packed)) hoja_rumble_msg_s;
 
 typedef struct {
-    uint8_t report_id;     // Should be set to 1
+    //uint8_t report_id;     // Should be set to 1
     uint8_t left_x;        // Left joystick X axis
     uint8_t left_y;        // Left joystick Y axis
     uint8_t right_x;       // Right joystick X axis
@@ -307,17 +307,20 @@ typedef struct {
         uint8_t capture : 1;
         uint8_t reserved : 2;  // Padding bits
     } buttons2;
+
     struct {
         uint8_t dpad : 4;     // D-pad as hat switch
         uint8_t padding : 4;  // Padding to complete the byte
     } dpad;
+
 } gc_input_s;
 
 typedef struct {
-    uint8_t report_id;  // Should be set to 2
+    // uint8_t report_id;  // Should be set to 2
     struct {
         uint8_t rumble : 1;        // Rumble on/off
-        uint8_t player_number : 7; // Player number (0-4)
+        uint8_t player_number : 3; // Player number (0-4)
+        uint8_t padding : 4;
     } feedback;
 } gc_output_s;
 

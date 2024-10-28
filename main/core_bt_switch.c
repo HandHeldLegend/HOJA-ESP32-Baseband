@@ -7,6 +7,7 @@ static volatile bool        _hid_connected = false;
 static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
 static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
 static volatile bool        _sniff = true;
+static volatile bool        _switch_paired = false;
 
 interval_s _ns_interval = {0};
 
@@ -302,11 +303,11 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 
         app_set_connected_status(0);
         
-        if(util_bt_get_paired())
+        if(_switch_paired)
         {
             ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
             esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-            util_bluetooth_connect();
+            util_bluetooth_connect(global_loaded_settings.paired_host_switch_mac);
         }
         else
         {
@@ -323,17 +324,11 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
             ESP_LOGI(TAG, "authentication success: %s", param->auth_cmpl.device_name);
             //esp_log_buffer_hex(TAG, param->auth_cmpl.bda, ESP_BD_ADDR_LEN);
             
-
-            // Set host bluetooth address
-            memcpy(&global_loaded_settings.switch_host_mac[0], &param->auth_cmpl.bda[0], ESP_BD_ADDR_LEN);
-
-            // We set pairing address here
-            if (!app_compare_mac(global_loaded_settings.switch_host_mac, global_loaded_settings.paired_host_mac))
+            if(!_switch_paired)
             {
-                app_save_host_mac();
+                _switch_paired = true;
+                app_save_host_mac(INPUT_MODE_SWPRO, &param->auth_cmpl.bda[0]);
             }
-
-            //ns_controller_input_task_set(NS_REPORT_MODE_BLANK);
         }
         else
         {
@@ -344,30 +339,7 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 
     case ESP_BT_GAP_MODE_CHG_EVT:
     {
-        // This is critical for Nintendo Switch to act upon.
-        // If power mode is 0, there should be NO packets sent from the controller until
-        // another power mode is initiated by the Nintendo Switch console.
-        /*
-        ns_event_s event = {.event_id = NS_EVENT_INTERVAL_CHANGE};
-
-        if ((!_hcif_report_interval && !_hcif_report_mode))
-        {   
-            // set interval to sniff interval
-            event.poll_interval = 0;
-            //ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
-        }
-        else
-        {
-            if(_hcif_report_mode == 2)
-            {   
-                ESP_LOGI(TAG, "Set Report Interval and non-idle: %d", _hcif_report_interval);
-                event.poll_interval = _hcif_report_interval;
-            }
-        }
-
-        xQueueSend(ns_event_queue, &event, 0);*/
-        //ESP_LOGI(TAG, "power mode change: %d", param->mode_chg.mode);
-
+        // Depreciated, not needed I guess
         break;
     }
 
@@ -391,11 +363,11 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->start.status == ESP_OK)
             {
                 ESP_LOGI(TAG, "START OK");
-                if(util_bt_get_paired())
+                if(_switch_paired)
                 {
                     ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
                     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                    util_bluetooth_connect();
+                    util_bluetooth_connect(&global_loaded_settings.paired_host_switch_mac);
                 }
                 else
                 {
@@ -450,7 +422,6 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             {
                 _hid_connected = false;
                 ns_reset_report_spacer();
-                //xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "DISCONNECT OK");
             }
             else
@@ -507,31 +478,23 @@ int core_bt_switch_start(void)
     // Convert calibration data
     switch_analog_calibration_init();
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac);
+    err = util_bluetooth_init(global_loaded_settings.device_mac_switch);
 
-    bool paired = false;
+    _switch_paired = false;
 
     for (uint8_t i = 0; i < 6; i++)
     {
-        if (global_loaded_settings.paired_host_mac[i] > 0)
-            paired = true;
+        if (global_loaded_settings.paired_host_switch_mac[i] > 0)
+            _switch_paired = true;
     }
 
-    if(paired)
+    if(_switch_paired)
     {
-        ESP_LOGI(TAG, "Paired host found, setting paired in util.");
-        util_bt_set_paired(true, global_loaded_settings.paired_host_mac);
+        ESP_LOGI(TAG, "Paired host found");
     }
 
     // Starting bt mode
     err = util_bluetooth_register_app(&switch_app_params, &switch_hidd_config);
-    if (err == 1)
-    {
-        vTaskDelay(1500 / portTICK_PERIOD_MS);
-
-        // Set host bluetooth address
-        memcpy(&global_loaded_settings.switch_host_mac[0], &global_loaded_settings.paired_host_mac[0], ESP_BD_ADDR_LEN);
-    }
 
     return 1;
 }
@@ -558,10 +521,7 @@ void ns_savepairing(uint8_t *host_addr)
 
     ESP_LOGI(TAG, "Pairing to Nintendo Switch.");
 
-    // Copy host address into settings memory.
-    memcpy(global_loaded_settings.switch_host_mac, host_addr, sizeof(global_loaded_settings.switch_host_mac));
-
-    // Save all settings send pairing info to RP2040
+    app_save_host_mac(INPUT_MODE_SWPRO, host_addr);
 }
 
 void _switch_bt_task_standard(void *parameters)

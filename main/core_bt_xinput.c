@@ -425,7 +425,7 @@ int core_bt_xinput_start(void)
     esp_err_t ret;
     int err = 1;
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac);
+    //err = util_bluetooth_init(global_loaded_settings.device_mac);
     err = util_bluetooth_register_app(&xinput_app_params, &xinput_hidd_config);
 
     

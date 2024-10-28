@@ -78,14 +78,23 @@ typedef struct
 
 typedef struct
 {
+    uint16_t magic;
+
     // Mac address of this device
-    uint8_t device_mac[6];
+    uint8_t device_mac_switch[6];
 
-    // Mac address of the device we are connected to
-    uint8_t switch_host_mac[6];
+    uint8_t device_mac_gamecube[6];
 
-    // Mac address of the device we are paired to
-    uint8_t paired_host_mac[6];
+    uint8_t device_mac_xinput[6];
+
+    // Mac address of the Switch we are paired to
+    uint8_t paired_host_switch_mac[6];
+
+    // Mac address of the GameCube we are paired to
+    uint8_t paired_host_gamecube_mac[6];
+
+    // Mac address of the XInput we are paired to
+    uint8_t paired_host_xinput_mac[6];
 } hoja_settings_s;
 
 extern hoja_settings_s global_loaded_settings;
@@ -270,5 +279,49 @@ typedef struct
     hoja_haptic_frame_linear_s linear; // Last known state 
     hoja_haptic_frame_s samples[3];
 } __attribute__ ((packed)) hoja_rumble_msg_s;
+
+typedef struct {
+    //uint8_t report_id Should be set to 0x01
+    uint8_t left_x;        // Left joystick X axis
+    uint8_t left_y;        // Left joystick Y axis
+    uint8_t right_x;       // Right joystick X axis
+    uint8_t right_y;       // Right joystick Y axis
+    uint8_t left_trigger;  // Left analog trigger
+    uint8_t right_trigger; // Right analog trigger
+    struct {
+        uint8_t a : 1;
+        uint8_t b : 1;
+        uint8_t x : 1;
+        uint8_t y : 1;
+        uint8_t l3 : 1;
+        uint8_t r3 : 1;
+        uint8_t l : 1; // Mirrored Z button/Switch L Button
+        uint8_t r : 1; // GameCube Z Button/Switch R Button
+    } buttons1;
+    struct {
+        uint8_t zl : 1; // GameCube L trigger 
+        uint8_t zr : 1; // GameCube R trigger
+        uint8_t start : 1;
+        uint8_t select : 1;
+        uint8_t home : 1;
+        uint8_t capture : 1;
+        uint8_t reserved : 2;  // Padding bits
+    } buttons2;
+
+    struct {
+        uint8_t dpad : 4;     // D-pad as hat switch
+        uint8_t padding : 4;  // Padding to complete the byte
+    } dpad;
+
+} gc_input_s;
+
+typedef struct {
+    // uint8_t report_id is 0x02
+    struct {
+        uint8_t rumble : 1;        // Rumble on/off
+        uint8_t player_number : 3; // Player number (0-4)
+        uint8_t padding : 4;
+    } feedback;
+} gc_output_s;
 
 #endif

@@ -5,7 +5,6 @@
 #include <stdbool.h>
 
 typedef unsigned long TickType_t;
-#define portMAX_DELAY ( TickType_t ) ULONG_MAX
 
 typedef enum {
     MI2C_OK,

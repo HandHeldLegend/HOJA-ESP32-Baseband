@@ -348,7 +348,7 @@ void util_bluetooth_deinit(void)
 /**
  * @brief Starts a bluetooth connection attempt.
 */
-void util_bluetooth_connect()
+void util_bluetooth_connect(uint8_t *host_mac)
 {
     const char* TAG = "util_bluetooth_connect";
 
@@ -366,7 +366,7 @@ void util_bluetooth_connect()
             bool connected = false;
             while (attempts_remaining > 0)
             {
-                esp_err_t  err = esp_bt_hid_device_connect(_util_bt_host_mac);
+                esp_err_t  err = esp_bt_hid_device_connect(host_mac);
                 if (err != ESP_OK)
                 {
                     attempts_remaining--;

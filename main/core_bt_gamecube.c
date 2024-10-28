@@ -225,7 +225,7 @@ void gamecube_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, 
             {
                 _hid_connected = true;
                 ESP_LOGI(TAG, "CONNECT OK");
-
+                app_set_connected_status(1);
             }
             else
             {
@@ -262,6 +262,7 @@ void gamecube_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, 
             if (param->disconnect.status == ESP_OK)
             {
                 _hid_connected = false;
+                //app_set_connected_status(0);
                 gc_reset_report_spacer();
                 ESP_LOGI(TAG, "DISCONNECT OK");
             }
@@ -288,7 +289,8 @@ esp_hid_raw_report_map_t gamecube_report_maps[1] = {
     {
         .data = gc_hid_report_descriptor,
         .len = (uint16_t)GC_HID_REPORT_MAP_LEN,
-    }};
+    }
+};
 
 // Bluetooth App setup data
 util_bt_app_params_s gamecube_app_params = {
@@ -302,7 +304,7 @@ esp_hid_device_config_t gamecube_hidd_config = {
     .vendor_id = HID_VEND_NSPRO,
     .product_id = HID_PROD_GCA,
     .version = 0x0100,
-    .device_name = "GC Ultimate Controller",
+    .device_name = "OpenGC BT Gamepad",
     .manufacturer_name = "HHL",
     .serial_number = "000000",
     .report_maps = gamecube_report_maps,
@@ -390,18 +392,52 @@ void _gamecube_bt_task_standard(void *parameters)
     }
 }
 
+// Function to calculate the D-pad value
+uint8_t gc_dpad_value(uint8_t up, uint8_t down, uint8_t left, uint8_t right) {
+    if (up) {
+        if (right) return 1;   // Up-Right
+        if (left)  return 7;   // Up-Left
+        return 0;              // Up
+    }
+    
+    if (down) {
+        if (right) return 3;   // Down-Right
+        if (left)  return 5;   // Down-Left
+        return 4;              // Down
+    }
+    
+    if (right) return 2;       // Right
+    if (left)  return 6;       // Left
+    
+    return 8;  // Center (no input)
+}
+
+#define CLAMP_0_255(value) ((value) < 0 ? 0 : ((value) > 255 ? 255 : (value)))
+
 void gamecube_bt_sendinput(i2cinput_input_s *input)
 {
-    _gamecube_input_data.left_x = input->lx>>4;
-    _gamecube_input_data.left_y = input->ly>>4;
+    _gamecube_input_data.left_x = CLAMP_0_255(input->lx>>4);
+    _gamecube_input_data.left_y = CLAMP_0_255(255-(input->ly>>4));
 
-    _gamecube_input_data.right_x = input->rx>>4;
-    _gamecube_input_data.right_y = input->ry>>4;
+    _gamecube_input_data.right_x = CLAMP_0_255(input->rx>>4);
+    _gamecube_input_data.right_y = CLAMP_0_255(input->ry>>4);
+
+    _gamecube_input_data.left_trigger   = CLAMP_0_255(input->lt>>4);
+    _gamecube_input_data.right_trigger  = CLAMP_0_255(input->rt>>4);
 
     _gamecube_input_data.buttons1.a = input->button_a;
     _gamecube_input_data.buttons1.b = input->button_b;
     _gamecube_input_data.buttons1.x = input->button_x;
     _gamecube_input_data.buttons1.y = input->button_y;
+
+    _gamecube_input_data.buttons1.l = input->trigger_l;
+    _gamecube_input_data.buttons1.r = input->trigger_r;
+    _gamecube_input_data.buttons2.zl = input->trigger_zl;
+    _gamecube_input_data.buttons2.zr = input->trigger_zr;
+
+    _gamecube_input_data.buttons2.start = input->button_plus;
+
+    _gamecube_input_data.dpad.dpad = gc_dpad_value(input->dpad_up, input->dpad_down, input->dpad_left, input->dpad_right);
 
     // Need DPAD implementation
 }

@@ -281,7 +281,7 @@ typedef struct
 } __attribute__ ((packed)) hoja_rumble_msg_s;
 
 typedef struct {
-    //uint8_t report_id;     // Should be set to 1
+    //uint8_t report_id Should be set to 0x01
     uint8_t left_x;        // Left joystick X axis
     uint8_t left_y;        // Left joystick Y axis
     uint8_t right_x;       // Right joystick X axis
@@ -295,12 +295,12 @@ typedef struct {
         uint8_t y : 1;
         uint8_t l3 : 1;
         uint8_t r3 : 1;
-        uint8_t l : 1;
-        uint8_t r : 1;
+        uint8_t l : 1; // Mirrored Z button/Switch L Button
+        uint8_t r : 1; // GameCube Z Button/Switch R Button
     } buttons1;
     struct {
-        uint8_t zl : 1;
-        uint8_t zr : 1;
+        uint8_t zl : 1; // GameCube L trigger 
+        uint8_t zr : 1; // GameCube R trigger
         uint8_t start : 1;
         uint8_t select : 1;
         uint8_t home : 1;
@@ -316,7 +316,7 @@ typedef struct {
 } gc_input_s;
 
 typedef struct {
-    // uint8_t report_id;  // Should be set to 2
+    // uint8_t report_id is 0x02
     struct {
         uint8_t rumble : 1;        // Rumble on/off
         uint8_t player_number : 3; // Player number (0-4)

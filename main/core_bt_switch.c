@@ -587,15 +587,15 @@ void switch_bt_sendinput(i2cinput_input_s *input)
     _switch_input_data.d_right = input->dpad_right;
     _switch_input_data.d_up = input->dpad_up;
 
-    _switch_input_data.b_capture = input->button_capture;
-    _switch_input_data.b_home = input->button_home;
-    _switch_input_data.b_minus = input->button_minus;
-    _switch_input_data.b_plus = input->button_plus;
+    _switch_input_data.b_capture    = input->button_capture;
+    _switch_input_data.b_home       = input->button_home;
+    _switch_input_data.b_minus      = input->button_minus;
+    _switch_input_data.b_plus       = input->button_plus;
 
     _switch_input_data.t_l = input->trigger_l;
     _switch_input_data.t_r = input->trigger_r;
-    _switch_input_data.t_zl = ((input->lt >= ANALOG_DIGITAL_THRESH) ? 1 : 0) | input->trigger_zl;
-    _switch_input_data.t_zr = ((input->rt >= ANALOG_DIGITAL_THRESH) ? 1 : 0) | input->trigger_zr;
+    _switch_input_data.t_zl = input->trigger_zl;
+    _switch_input_data.t_zr = input->trigger_zr;
 
     _switch_input_data.sb_left = input->button_stick_left;
     _switch_input_data.sb_right = input->button_stick_right;

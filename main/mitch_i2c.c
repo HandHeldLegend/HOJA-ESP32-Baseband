@@ -4,6 +4,7 @@
 #include "hoja_includes.h"
 #include "hal/i2c_hal.h"
 #include "esp_private/periph_ctrl.h"
+#include "soc/periph_defs.h"
 #include "soc/i2c_reg.h"
 #include "soc/i2c_struct.h"
 
@@ -81,10 +82,10 @@ uint8_t *mi2c_ringbuffer_get()
         return NULL;
     }
 
-    i2cinput_status_s *data = &(_rx_ring_buffer[_rx_ringbuffer_.tail]);
+    i2cinput_status_s *data = (i2cinput_status_s *) &(_rx_ring_buffer[_rx_ringbuffer_.tail]);
     _rx_ringbuffer_.tail = (_rx_ringbuffer_.tail + 1) % _rx_ringbuffer_.size;
     _rx_ringbuffer_.count--;
-    return data;
+    return (uint8_t *) data;
 }
 
 static void IRAM_ATTR mi2c_isr_handler_default(void *arg)
@@ -160,11 +161,11 @@ void mi2c_slave_setup()
     {
         portENTER_CRITICAL(&spinlock);
         i2c_hal_deinit(&context);
-        periph_module_disable(i2c_periph_signal[I2C_NUM_0].module);
+        periph_module_disable(PERIPH_I2C0_MODULE);
         portEXIT_CRITICAL(&spinlock);
     }
 
-    periph_module_enable(i2c_periph_signal[I2C_NUM_0].module);
+    periph_module_enable(PERIPH_I2C0_MODULE);
     i2c_hal_init(&context, I2C_NUM_0);
     i2c_enabled = true;
 

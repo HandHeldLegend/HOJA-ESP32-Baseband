@@ -317,13 +317,13 @@ void settings_default()
     global_loaded_settings.magic = HOJA_MAGIC_NUM;
 
     memset(&global_loaded_settings.paired_host_switch_mac, 0, 6);
-    generate_random_mac(&global_loaded_settings.device_mac_switch);
+    generate_random_mac(global_loaded_settings.device_mac_switch);
 
     memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
-    generate_random_mac(&global_loaded_settings.device_mac_gamecube);
+    generate_random_mac(global_loaded_settings.device_mac_gamecube);
 
     memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
-    generate_random_mac(&global_loaded_settings.device_mac_xinput);
+    generate_random_mac(global_loaded_settings.device_mac_xinput);
 }
 
 void app_settings_save()
@@ -358,15 +358,15 @@ void app_save_host_mac(input_mode_t mode, uint8_t *address)
     {
         default:
         case INPUT_MODE_SWPRO:
-            write_address = &global_loaded_settings.paired_host_switch_mac;
+            write_address = global_loaded_settings.paired_host_switch_mac;
         break;
 
         case INPUT_MODE_GAMECUBE:   
-            write_address = &global_loaded_settings.paired_host_gamecube_mac;
+            write_address = global_loaded_settings.paired_host_gamecube_mac;
         break;
 
         case INPUT_MODE_XINPUT:
-            write_address = &global_loaded_settings.paired_host_xinput_mac;
+            write_address = global_loaded_settings.paired_host_xinput_mac;
         break;
     }
 
@@ -479,18 +479,18 @@ void bt_device_start(uint8_t *data)
             default:
             case INPUT_MODE_SWPRO:
                 memset(&global_loaded_settings.paired_host_switch_mac, 0, 6);
-                generate_random_mac(&global_loaded_settings.device_mac_switch);
+                generate_random_mac(global_loaded_settings.device_mac_switch);
             break;
 
             case INPUT_MODE_GCUSB:
             case INPUT_MODE_GAMECUBE:
                 memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
-                generate_random_mac(&global_loaded_settings.device_mac_gamecube);
+                generate_random_mac(global_loaded_settings.device_mac_gamecube);
             break;
 
             case INPUT_MODE_XINPUT:
                 memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
-                generate_random_mac(&global_loaded_settings.device_mac_xinput);
+                generate_random_mac(global_loaded_settings.device_mac_xinput);
             break;
         }
 
@@ -525,11 +525,11 @@ void bt_device_start(uint8_t *data)
         core_bt_gamecube_start();
         break;
 
-    //case INPUT_MODE_XINPUT:
-    //    _bluetooth_input_cb = xinput_bt_sendinput;
-    //    ESP_LOGI(TAG, "XInput BT Mode Init...");
-    //    core_bt_xinput_start();
-    //    break;
+    case INPUT_MODE_XINPUT:
+        _bluetooth_input_cb = xinput_bt_sendinput;
+        ESP_LOGI(TAG, "XInput BT Mode Init...");
+        core_bt_xinput_start();
+        break;
     }
 }
 

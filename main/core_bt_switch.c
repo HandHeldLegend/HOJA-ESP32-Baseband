@@ -79,24 +79,6 @@ typedef enum
     NS_STATUS_RUNNING,
 } ns_core_status_t;
 
-typedef enum
-{
-    NS_EVENT_HID_CHANGE,
-    NS_EVENT_REPORT_MODE_CHANGE,
-    NS_EVENT_SET_SNIFF,
-    NS_EVENT_SET_AWAKE,
-} ns_event_t;
-
-typedef struct
-{
-    ns_event_t event_id;
-    ns_report_mode_t report_mode;
-    uint16_t poll_interval;
-    bool hid_connected;
-} ns_event_s;
-
-QueueHandle_t ns_event_queue;
-
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
 
@@ -149,8 +131,6 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 {
     const char *TAG = "ns_controller_input_task_set";
 
-    ns_event_s event = {.event_id = NS_EVENT_REPORT_MODE_CHANGE};
-
     switch (report_mode_type)
     {
     default:
@@ -159,7 +139,6 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 
     case NS_REPORT_MODE_BLANK:
         ESP_LOGI(TAG, "Set Report Mode BLANK");
-        event.report_mode = NS_REPORT_MODE_BLANK;
 
         if(_switch_bt_task_handle==NULL)
         {
@@ -182,11 +161,8 @@ void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
 
     case NS_REPORT_MODE_FULL:
         ESP_LOGI(TAG, "Set Report Mode FULL");
-        event.report_mode = NS_REPORT_MODE_FULL;
         break;
     }
-
-    xQueueSend(ns_event_queue, &event, 0);
 }
 
 uint32_t interval_to_ticks(uint16_t interval)
@@ -201,6 +177,7 @@ uint32_t interval_to_us(uint16_t interval)
     return (uint32_t) interval * 625;
 }
 
+// Unused
 void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
 {
     // Ignore all of this for debug
@@ -226,6 +203,7 @@ void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
 #define HCI_MODE_SNIFF                  0x02
 #define HCI_MODE_PARK                   0x03
 
+// Unused
 void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
 {
     if (!succeeded) {
@@ -367,7 +345,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
                 {
                     ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
                     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                    util_bluetooth_connect(&global_loaded_settings.paired_host_switch_mac);
+                    util_bluetooth_connect(global_loaded_settings.paired_host_switch_mac);
                 }
                 else
                 {
@@ -382,9 +360,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
         {
             if (param->connect.status == ESP_OK)
             {
-                ns_event_s connect_event = {.event_id = NS_EVENT_HID_CHANGE, .hid_connected = true};
                 _hid_connected = true;
-                //xQueueSend(ns_event_queue, &connect_event, 0);
                 ESP_LOGI(TAG, "CONNECT OK");
 
             }

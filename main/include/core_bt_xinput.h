@@ -6,6 +6,12 @@
 #define XI_HID_LEN 16
 #define XI_INPUT_REPORT_ID 0x01
 
+/* Thanks to https://github.com/Mystfit/ESP32-BLE-CompositeHID */
+#define XINPUT_INPUT_REPORT_ID 0x01
+#define XINPUT_EXTRA_INPUT_REPORT_ID 0x02
+#define XINPUT_OUTPUT_REPORT_ID 0x03
+#define XINPUT_EXTRA_OUTPUT_REPORT_ID 0x04
+
 /**
  * Xbox One BT Format
  * 

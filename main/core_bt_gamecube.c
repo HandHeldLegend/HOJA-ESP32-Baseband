@@ -208,7 +208,7 @@ void gamecube_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, 
                 {
                     ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
                     esp_bt_gap_set_scan_mode(ESP_BT_NON_CONNECTABLE, ESP_BT_NON_DISCOVERABLE);
-                    util_bluetooth_connect(&global_loaded_settings.paired_host_gamecube_mac);
+                    util_bluetooth_connect(global_loaded_settings.paired_host_gamecube_mac);
                 }
                 else
                 {

@@ -1,24 +1,20 @@
 #include "core_bt_xinput.h"
 
-TaskHandle_t _xinput_task_handler = NULL;
+#define XINPUT_TICK_DELAY (8/portTICK_PERIOD_MS)
+#define XINPUT_US_DELAY (1000 * 4)
 
-QueueHandle_t _xinput_event_queue;
+TaskHandle_t _xinput_task_handler = NULL;
+interval_s _xinput_interval = {0};
+static volatile bool        _xinput_connected = false;
+static volatile bool        _xinput_gap_started = false;
+
+bool xinput_send_check_nonblocking()
+{
+    uint32_t timestamp = get_timestamp_us();
+    return interval_run(timestamp, XINPUT_US_DELAY, &_xinput_interval);
+}
 
 void _xinput_bt_input_task(void * params);
-
-typedef enum
-{
-    XINPUT_EVT_HID_CONNECT,
-    XINPUT_EVT_HID_DISCONNECT,
-    XINPUT_EVT_GAP_AUTH,
-} xinput_event_t;
-
-typedef struct
-{
-    xinput_event_t event;
-    bool hid_connected;
-    bool gap_auth;
-} xinput_event_s;
 
 // XINPUT BLE HIDD callback
 void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, void *event_data)
@@ -31,21 +27,19 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     {
     case ESP_HIDD_START_EVENT:
     {
-        ESP_LOGI(TAG, "START");
-        xTaskCreatePinnedToCore(_xinput_bt_input_task, 
-                                "XInput Send Task", 4036,
-                                NULL, 0, &_xinput_task_handler, 0);
-        
-        vTaskDelay(100/portTICK_PERIOD_MS);
-                                
+        ESP_LOGI(TAG, "START"); 
         esp_hid_ble_gap_adv_start();
         break;
     }
     case ESP_HIDD_CONNECT_EVENT:
     {
+        _xinput_connected = true;
         ESP_LOGI(TAG, "CONNECT");
-        xinput_event_s connect_event = {.event = XINPUT_EVT_HID_CONNECT, .hid_connected = true};
-        xQueueSend(_xinput_event_queue, &connect_event, 0);
+
+        xTaskCreatePinnedToCore(_xinput_bt_input_task, 
+                                "XInput Send Task", 4024,
+                                NULL, 0, &_xinput_task_handler, 0);
+    
         app_set_connected_status(1);
         break;
     }
@@ -89,11 +83,9 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
     }
     case ESP_HIDD_DISCONNECT_EVENT:
     {
+        _xinput_connected = false;
         ESP_LOGI(TAG, "DISCONNECT: %s", esp_hid_disconnect_reason_str(esp_hidd_dev_transport_get(param->disconnect.dev), param->disconnect.reason));
 
-        xinput_event_s connect_event = {.event = 0, .hid_connected = false};
-        xQueueSend(_xinput_event_queue, &connect_event, 0);
-        
         esp_hid_ble_gap_adv_start();
         app_set_connected_status(0);
         break;
@@ -106,10 +98,6 @@ void xinput_ble_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
             _xinput_task_handler = NULL;
         }
 
-        xinput_event_s connect_event = {.event = 1, .gap_auth = false};
-        xQueueSend(_xinput_event_queue, &connect_event, 0);
-
-        
         ESP_LOGI(TAG, "STOP");
         break;
     }
@@ -181,11 +169,23 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         }
         else
         {
+            _xinput_gap_started = true;
+
+            esp_ble_conn_update_params_t conn_params = {0};
+            memcpy(conn_params.bda, param->ble_security.auth_cmpl.bd_addr, sizeof(esp_bd_addr_t));
+
+            conn_params.latency = 0;
+            conn_params.max_int = 7;    // max_int = 0x20*1.25ms = 40ms
+            conn_params.min_int = 1;    // min_int = 0x10*1.25ms = 20ms
+            conn_params.timeout = 400;    // timeout = 400*10ms = 4000ms
+            //start sent the update connection parameters to the peer device.
+            esp_ble_gap_update_conn_params(&conn_params);
+
             ESP_LOGI(TAG, "BLE GAP AUTH SUCCESS");
-            xinput_event_s connect_event = {.event = XINPUT_EVT_GAP_AUTH, .gap_auth = true};
-            xQueueSend(_xinput_event_queue, &connect_event, 0);
+            
             app_set_connected_status(1);
         }
+
         break;
 
     case ESP_GAP_BLE_KEY_EVT: // shows the ble key info share with peer device to the user.
@@ -202,6 +202,7 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         // The app will receive this event when the IO has DisplayYesNO capability and the peer device IO also has DisplayYesNo capability.
         // show the passkey number to the user to confirm it with the number displayed by peer device.
         ESP_LOGI(TAG, "BLE GAP NC_REQ passkey:%d", (unsigned int)param->ble_security.key_notif.passkey);
+
         esp_ble_confirm_reply(param->ble_security.key_notif.bd_addr, true);
         break;
 
@@ -213,10 +214,12 @@ void xinput_ble_gap_cb(esp_gap_ble_cb_event_t event, esp_ble_gap_cb_param_t *par
         break;
 
     case ESP_GAP_BLE_SEC_REQ_EVT:
+        _xinput_gap_started = false;
         ESP_LOGI(TAG, "BLE GAP SEC_REQ");
         // Send the positive(true) security response to the peer device to accept the security request.
         // If not accept the security request, should send the security response with negative(false) accept value.
         esp_ble_gap_security_rsp(param->ble_security.ble_req.bd_addr, true);
+        
         break;
 
     default:
@@ -249,17 +252,21 @@ uint8_t xinput_hidd_service_uuid128[] = {
     0x79,
 };
 
+uint8_t hidd_service_uuid128[] = {
+        0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
+};
+
 // Bluetooth App setup data
 util_bt_app_params_s xinput_app_params = {
     .ble_hidd_cb = xinput_ble_hidd_cb,
     .ble_gap_cb = xinput_ble_gap_cb,
     .bt_mode = ESP_BT_MODE_BLE,
     .appearance = ESP_HID_APPEARANCE_GAMEPAD,
-    .uuid128 = xinput_hidd_service_uuid128,
+    .uuid128 = hidd_service_uuid128,
 };
 
 // Takes in both XINPUT structs and returns if they match.
-bool xinput_compare(xi_input_s *one, xi_input_s *two)
+bool xinput_compared_is_different(xi_input_s *one, xi_input_s *two)
 {
     bool ret = false;
     ret |= one->buttons_1 != two->buttons_1;
@@ -334,42 +341,23 @@ void _xinput_bt_input_task(void * params)
 {
     const char *TAG = "_xinput_bt_input_task";
     ESP_LOGI(TAG, "Starting XInput task loop.");
-    static xinput_event_s received_event = {0};
-    static bool connected = false;
-    static bool gap_auth = false;
 
-    _xinput_event_queue = xQueueCreate(10, sizeof(xinput_event_s));
-    if (_xinput_event_queue == NULL) {
-        printf("Failed to create event queue\n");
-        return;
-    }
+    static bool outputting = false;
 
     for(;;)
     {
-        while(xQueueReceive(_xinput_event_queue, &received_event, 0) == pdTRUE)
+        if(_xinput_connected && _xinput_gap_started)
         {
-            switch(received_event.event)
+            if(xinput_send_check_nonblocking())
             {
-                case XINPUT_EVT_GAP_AUTH:
-                gap_auth = true;
-                break;
-
-                case XINPUT_EVT_HID_CONNECT:
-                connected = true;
-                break;
-
-                case XINPUT_EVT_HID_DISCONNECT:
-                connected = false;
-                break;
-            }
+                memcpy(xi_buffer, &xi_input, XI_HID_LEN);
+                esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
+            }   
         }
-
-        if(connected && gap_auth)
+        else 
         {
-            memcpy(xi_buffer, &xi_input, XI_HID_LEN);
-            esp_hidd_dev_input_set(xinput_app_params.hid_dev, 0, XI_INPUT_REPORT_ID, xi_buffer, XI_HID_LEN);
+            vTaskDelay(8/portTICK_PERIOD_MS);
         }
-        vTaskDelay(4/portTICK_PERIOD_MS);
     }
 }
 
@@ -410,12 +398,13 @@ void xinput_bt_sendinput(i2cinput_input_s *input)
 esp_hid_device_config_t xinput_hidd_config = {
     .vendor_id = HID_VEND_XINPUT,
     .product_id = HID_PROD_XINPUT,
+    .vendor_id_source = 0x01,
     .version = 0x0000,
-    .device_name = "XInput BLE Gamepad",
+    .device_name = "Hoja XInput",
     .manufacturer_name = "HHL",
     .serial_number = "000000",
     .report_maps = xinput_report_maps,
-    .report_maps_len = 1,
+    .report_maps_len = 1
 };
 
 // Public Functions
@@ -425,7 +414,7 @@ int core_bt_xinput_start(void)
     esp_err_t ret;
     int err = 1;
 
-    //err = util_bluetooth_init(global_loaded_settings.device_mac);
+    err = util_bluetooth_init(global_loaded_settings.device_mac_xinput);
     err = util_bluetooth_register_app(&xinput_app_params, &xinput_hidd_config);
 
     

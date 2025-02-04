@@ -93,11 +93,6 @@ int ble_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_co
         return -1;
     }
 
-    /*
-    const uint8_t hidd_service_uuid128_old[] = {
-        0xfb, 0x34, 0x9b, 0x5f, 0x80, 0x00, 0x00, 0x80, 0x00, 0x10, 0x00, 0x00, 0x12, 0x18, 0x00, 0x00,
-    };*/
-
     esp_ble_adv_data_t ble_adv_data = {
         .set_scan_rsp = false,
         .include_name = true,
@@ -263,6 +258,10 @@ int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hi
     const char* TAG = "util_bluetooth_register_app";
     esp_err_t ret;
     int err = 1;
+
+    // Set default vendor ID source
+    if(!hidd_device_config->vendor_id_source)
+        hidd_device_config->vendor_id_source = 0x01; // Bluetooth SIG
 
     if (util_bt_hid_status < UTIL_BT_HID_STATUS_INITIALIZED)
     {

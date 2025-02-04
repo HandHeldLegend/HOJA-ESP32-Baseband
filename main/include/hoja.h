@@ -1,6 +1,8 @@
 #ifndef HOJA_H
 #define HOJA_H
 
+#define SDP_MAX_PAD_LEN 500
+
 #include "hoja_includes.h"
 
 uint32_t get_timestamp_us();

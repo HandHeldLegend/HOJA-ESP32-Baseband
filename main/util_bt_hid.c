@@ -1,17 +1,66 @@
 #include "util_bt_hid.h"
+#if CONFIG_BT_SDP_COMMON_ENABLED
+#include "esp_sdp_api.h"
+#endif /* CONFIG_BT_SDP_COMMON_ENABLED */
 #include "sdkconfig.h"
 
 esp_bt_controller_config_t bt_cfg = {0};
 TaskHandle_t _util_bt_timeout_task = NULL;
 
-esp_hidd_app_param_t hid_app_param = {0};
+typedef struct 
+{
+    uint16_t    vendor_id;
+    uint8_t     vendor_id_source; /*!< HID Vendor Source ID (0x1=BT, 0x2=USB IF) */
+    uint16_t    product_id;
+    uint16_t    version;
+} util_bt_store_s;
 
 uint8_t _util_bt_host_mac[6] = {0};
 bool _util_bt_host_paired = false;
+util_bt_store_s _util_bt_store = {0};
 
-// TEMPLATE CALLBACK FUNCTIONS
-// USE THESE TO PASTE INTO YOUR OWN
-// CONTROLLER CORES FOR HANDLING
+// BT Classic SDP callback
+#if CONFIG_BT_SDP_COMMON_ENABLED
+static void util_bt_sdp_cb(esp_sdp_cb_event_t event, esp_sdp_cb_param_t *param)
+{
+    const char* TAG = "util_bt_sdp_cb";
+    
+    switch (event) {
+    case ESP_SDP_INIT_EVT:
+        ESP_LOGI(TAG, "ESP_SDP_INIT_EVT: status:%d", param->init.status);
+        if (param->init.status == ESP_SDP_SUCCESS) {
+            esp_bluetooth_sdp_dip_record_t dip_record = {
+                .hdr =
+                    {
+                        .type = ESP_SDP_TYPE_DIP_SERVER,
+                    },
+                .vendor           = _util_bt_store.vendor_id,
+                .vendor_id_source = _util_bt_store.vendor_id_source,
+                .product          = _util_bt_store.product_id,
+                .version          = _util_bt_store.version,
+                .primary_record   = true,
+            };
+            esp_sdp_create_record((esp_bluetooth_sdp_record_t *)&dip_record);
+        }
+        break;
+    case ESP_SDP_DEINIT_EVT:
+        ESP_LOGI(TAG, "ESP_SDP_DEINIT_EVT: status:%d", param->deinit.status);
+        break;
+    case ESP_SDP_SEARCH_COMP_EVT:
+        ESP_LOGI(TAG, "ESP_SDP_SEARCH_COMP_EVT: status:%d", param->search.status);
+        break;
+    case ESP_SDP_CREATE_RECORD_COMP_EVT:
+        ESP_LOGI(TAG, "ESP_SDP_CREATE_RECORD_COMP_EVT: status:%d, handle:0x%x", param->create_record.status,
+                 param->create_record.record_handle);
+        break;
+    case ESP_SDP_REMOVE_RECORD_COMP_EVT:
+        ESP_LOGI(TAG, "ESP_SDP_REMOVE_RECORD_COMP_EVT: status:%d", param->remove_record.status);
+        break;
+    default:
+        break;
+    }
+}
+#endif /* CONFIG_BT_SDP_COMMON_ENABLED */
 
 // BT Classic HID Callbacks
 
@@ -259,10 +308,6 @@ int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hi
     esp_err_t ret;
     int err = 1;
 
-    // Set default vendor ID source
-    if(!hidd_device_config->vendor_id_source)
-        hidd_device_config->vendor_id_source = 0x01; // Bluetooth SIG
-
     if (util_bt_hid_status < UTIL_BT_HID_STATUS_INITIALIZED)
     {
         ESP_LOGE(TAG, "Register with util_bluetooth_init() first!");
@@ -283,6 +328,16 @@ int util_bluetooth_register_app(util_bt_app_params_s *util_bt_app_params, esp_hi
     {
         case ESP_BT_MODE_CLASSIC_BT:
             #if CONFIG_BT_HID_DEVICE_ENABLED
+
+            _util_bt_store.product_id = hidd_device_config->product_id;
+            _util_bt_store.vendor_id = hidd_device_config->vendor_id;
+            _util_bt_store.vendor_id_source = 0x01;
+
+            #if CONFIG_BT_SDP_COMMON_ENABLED
+                ESP_ERROR_CHECK(esp_sdp_register_callback(util_bt_sdp_cb));
+                ESP_ERROR_CHECK(esp_sdp_init());
+            #endif /* CONFIG_BT_SDP_COMMON_ENABLED */
+
             bt_cfg.bt_max_acl_conn = 3;
             bt_cfg.bt_max_sync_conn = 3;
             err = bt_register_app(util_bt_app_params, hidd_device_config);

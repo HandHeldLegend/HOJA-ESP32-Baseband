@@ -398,7 +398,7 @@ void xinput_bt_sendinput(i2cinput_input_s *input)
 esp_hid_device_config_t xinput_hidd_config = {
     .vendor_id = HID_VEND_XINPUT,
     .product_id = HID_PROD_XINPUT,
-    .vendor_id_source = 0x01,
+    //.vendor_id_source = 0x01,
     .version = 0x0000,
     .device_name = "Hoja XInput",
     .manufacturer_name = "HHL",

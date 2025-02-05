@@ -1,0 +1,95 @@
+I'm translating some info from an existing and working version
+
+BLEDevice::init is called
+
+arduino layer does
+
+esp_bt_controller_enable(ESP_BT_MODE_BLE);
+
+esp_bluedroid_init();
+
+esp_bluedroid_enable();
+
+esp_ble_gap_register_callback(BLEDevice::gapEventHandler);
+
+if GATTC is enabled 
+esp_ble_gattc_register_callback(BLEDevice::gattClientEventHandler);
+
+if gatts is enabled 
+esp_ble_gatts_register_callback(BLEDevice::gattServerEventHandler);
+
+device name set
+esp_ble_gap_set_device_name(deviceName.c_str());
+
+security param set 
+esp_ble_io_cap_t iocap = ESP_IO_CAP_NONE;
+errRc = ::esp_ble_gap_set_security_param(ESP_BLE_SM_IOCAP_MODE, &iocap, sizeof(uint8_t));
+
+
+delay 200ms
+
+---------------
+createServer() is called 
+
+new BLEServer is called/init 
+
+m_appId is default 0
+
+m_pServer->createApp(m_appId++);
+createApp does registerApp(appId);
+
+Finally hits our ESP IDF layer
+esp_ble_gatts_app_register(m_appId);
+
+---------------
+
+Provides a pointer so the callbacks can influence
+our connectionStatus var
+pServer->setCallbacks(BleGamepadInstance->connectionStatus)
+
+---------------
+
+new BLEHIDDevice is made 
+
+/*
+	 * Here we create mandatory services described in bluetooth specification
+	 */
+  m_deviceInfoService = server->createService(BLEUUID((uint16_t)0x180a));
+  m_hidService = server->createService(BLEUUID((uint16_t)0x1812), 40);
+  m_batteryService = server->createService(BLEUUID((uint16_t)0x180f));
+
+  /*
+	 * Mandatory characteristic for device info service
+	 */
+  m_pnpCharacteristic = m_deviceInfoService->createCharacteristic((uint16_t)0x2a50, BLECharacteristic::PROPERTY_READ);
+
+  /*
+	 * Mandatory characteristics for HID service
+	 */
+  m_hidInfoCharacteristic = m_hidService->createCharacteristic((uint16_t)0x2a4a, BLECharacteristic::PROPERTY_READ);
+  m_reportMapCharacteristic = m_hidService->createCharacteristic((uint16_t)0x2a4b, BLECharacteristic::PROPERTY_READ);
+  m_hidControlCharacteristic = m_hidService->createCharacteristic((uint16_t)0x2a4c, BLECharacteristic::PROPERTY_WRITE_NR);
+  m_protocolModeCharacteristic = m_hidService->createCharacteristic((uint16_t)0x2a4e, BLECharacteristic::PROPERTY_WRITE_NR | BLECharacteristic::PROPERTY_READ);
+
+  /*
+	 * Mandatory battery level characteristic with notification and presence descriptor
+	 */
+  BLE2904 *batteryLevelDescriptor = new BLE2904();
+  batteryLevelDescriptor->setFormat(BLE2904::FORMAT_UINT8);
+  batteryLevelDescriptor->setNamespace(1);
+  batteryLevelDescriptor->setUnit(0x27ad);
+
+  m_batteryLevelCharacteristic =
+    m_batteryService->createCharacteristic((uint16_t)0x2a19, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  m_batteryLevelCharacteristic->addDescriptor(batteryLevelDescriptor);
+  BLE2902 *batLevelIndicator = new BLE2902();
+  // Battery Level Notification is ON by default, making it work always on BLE Pairing and Bonding
+  batLevelIndicator->setNotifications(true);
+  m_batteryLevelCharacteristic->addDescriptor(batLevelIndicator);
+
+  /*
+	 * This value is setup here because its default value in most usage cases, its very rare to use boot mode
+	 * and we want to simplify library using as much as possible
+	 */
+  const uint8_t pMode[] = {0x01};
+  protocolMode()->setValue((uint8_t *)pMode, 1);

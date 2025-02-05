@@ -203,7 +203,7 @@ void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
 #define HCI_MODE_SNIFF                  0x02
 #define HCI_MODE_PARK                   0x03
 
-// Unused
+
 void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
 {
     if (!succeeded) {
@@ -234,6 +234,12 @@ void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, 
     //vTaskDelay(16/portTICK_PERIOD_MS);
     ns_reset_report_spacer();
 }
+
+/* HCI mode defenitions */
+#define HCI_MODE_ACTIVE                 0x00
+#define HCI_MODE_HOLD                   0x01
+#define HCI_MODE_SNIFF                  0x02
+#define HCI_MODE_PARK                   0x03
 
 // SWITCH BTC GAP Event Callback
 void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)

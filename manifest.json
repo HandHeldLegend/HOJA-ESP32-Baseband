@@ -1,4 +1,4 @@
 {
-  "changelog": "2.3.2025 Reintroduce XInput",
-  "fw_version": 40992
+  "changelog": "2.5.2025 Fix PM Callback",
+  "fw_version": 40993
 }

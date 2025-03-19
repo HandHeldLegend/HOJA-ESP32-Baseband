@@ -97,17 +97,26 @@ typedef struct
     uint8_t paired_host_xinput_mac[6];
 } hoja_settings_s;
 
+typedef struct 
+{
+    uint8_t rgb_gripl[3];
+    uint8_t rgb_gripr[3];
+    uint8_t rgb_body[3];
+    uint8_t rgb_buttons[3];
+} hoja_live_s;
+
 extern hoja_settings_s global_loaded_settings;
+extern hoja_live_s global_live_data;
 
 typedef union
-  {
+{
     struct
     {
-      uint8_t connection  : 4; // 1 is charging, 0 is not connected
-      uint8_t bat_lvl     : 4; // 0-8 battery level
+        uint8_t connection  : 4; // 1 is charging, 0 is not connected
+        uint8_t bat_lvl     : 4; // 0-8 battery level
     };
     uint8_t bat_status;
-  } switch_battery_status_u;
+} switch_battery_status_u;
 
 // Status return data types
 typedef enum

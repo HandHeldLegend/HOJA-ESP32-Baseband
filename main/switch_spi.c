@@ -253,38 +253,54 @@ uint8_t sw_spi_getaddressdata(uint8_t offset_address, uint8_t address)
 
                 // STAGE 2 READ
                 // 0x6050 | Length 13 bytes
-                // TO-DO - Implement factory body color.
+                // factory body color.
                 case 0x50:
-                    return 26; // Red
+                    return global_live_data.rgb_body[0]; // Red
                     break;
                 case 0x51:
-                    return 26; // Green
+                    return global_live_data.rgb_body[1]; // Green
                     break;
                 case 0x52:
-                    return 26; // Blue
+                    return global_live_data.rgb_body[2]; // Blue
                     break;
 
-                // TO-DO - Implement factory buttons color.
-                case 0x53 ... 0x55:
-                    return 94; // Default real ProCon
+                // factory buttons color.
+                case 0x53:
+                    return global_live_data.rgb_buttons[0]; // Red
                     break;
 
-                // TO-DO - Implement factory left grip color.
+                case 0x54:
+                    return global_live_data.rgb_buttons[1]; // Green
+                    break;
+
+                case 0x55:
+                    return global_live_data.rgb_buttons[2]; // Blue
+                    break;
+
+                // factory left grip color.
                 case 0x56:
-                    return 255; // R default smash procon
+                    return global_live_data.rgb_gripl[0]; // Red
                     break;
 
                 case 0x57:
-                    return 255; // G
+                    return global_live_data.rgb_gripl[1]; // Green
                     break;
 
                 case 0x58:
-                    return 255; // B
+                    return global_live_data.rgb_gripl[2]; // Blue
                     break;
 
-                // TO-DO - Implement factory grip (left and right) color.
-                case 0x59 ... 0x5B:
-                    return 255; // Default procon
+                // factory grip (left and right) color.
+                case 0x59:
+                    return global_live_data.rgb_gripr[0]; // Red
+                    break;
+
+                case 0x5A:
+                    return global_live_data.rgb_gripr[1]; // Green
+                    break;
+                    
+                case 0x5B:
+                    return global_live_data.rgb_gripr[2]; // Blue
                     break;
 
                 case 0x5C:

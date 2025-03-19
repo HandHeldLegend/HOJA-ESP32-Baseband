@@ -88,6 +88,7 @@ bluetooth_input_cb_t _bluetooth_input_cb = NULL;
 
 // Our loaded configuration data
 hoja_settings_s global_loaded_settings = {0};
+hoja_live_s global_live_data = {0};
 
 // Our buffer for outgoing i2cinput messages
 #define I2C_STATUS_BUFFER_SIZE 32
@@ -469,6 +470,22 @@ void bt_device_start(uint8_t *data)
     }
 
     input_mode_t mode = data[2] & 0x7F;
+
+    global_live_data.rgb_gripl[0] = data[5];
+    global_live_data.rgb_gripl[1] = data[6];
+    global_live_data.rgb_gripl[2] = data[7];
+
+    global_live_data.rgb_gripr[0] = data[8];
+    global_live_data.rgb_gripr[1] = data[9];
+    global_live_data.rgb_gripr[2] = data[10];
+
+    global_live_data.rgb_body[0] = data[11];
+    global_live_data.rgb_body[1] = data[12];
+    global_live_data.rgb_body[2] = data[13];
+
+    global_live_data.rgb_buttons[0] = data[14];
+    global_live_data.rgb_buttons[1] = data[15];
+    global_live_data.rgb_buttons[2] = data[16];
 
     // Check if we should clear our addresses
     // to initiate a new pairing sequence

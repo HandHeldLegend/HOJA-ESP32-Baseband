@@ -44,6 +44,14 @@ uint32_t get_timestamp_us()
 uint8_t _i2c_buffer_in[I2C_RX_BUFFER_SIZE];
 uint8_t _i2c_buffer_out[I2C_TX_BUFFER_SIZE];
 
+volatile bool _internal_adc_active = false;
+adc_oneshot_unit_handle_t _adc1_handle;
+adc_unit_t _adc1 = ADC_UNIT_1;
+adc_oneshot_unit_init_cfg_t _adc_init_config1 = {
+    .unit_id = ADC_UNIT_1,
+};
+adc_channel_t _internal_adc_channel = 0;
+
 QueueHandle_t main_receive_queue;
 
 // Polynomial for CRC-8 (x^8 + x^2 + x + 1)
@@ -229,7 +237,7 @@ bool app_compare_mac(uint8_t *mac_1, uint8_t *mac_2)
 }
 
 // Only call from core 1
-void app_set_power_setting(uint8_t power)
+void app_set_power_setting(i2c_power_code_t power)
 {
     uint8_t power_buffer[I2C_TX_BUFFER_SIZE] = {0};
     i2cinput_status_s power_status = {
@@ -384,6 +392,96 @@ void app_save_host_mac(input_mode_t mode, uint8_t *address)
     }
 }
 
+// Returns if power is good or not
+bool app_process_internal_adc()
+{
+    if(_internal_adc_active)
+    {
+        static int adc_counter = 1000;
+        // This runs the ADC counter every 1000 cycles (1 second)
+        if(adc_counter++ < 1000)
+        {
+            return true;
+        }
+        adc_counter = 0;
+
+        // Read the ADC value
+        // and update the battery status
+        int reading = 0;
+        ESP_ERROR_CHECK(adc_oneshot_read(_adc1_handle, _internal_adc_channel, &reading));
+        uint16_t raw_voltage = (uint16_t) reading;
+
+        ESP_LOGI("VRAW:", "Raw Voltage: %d", raw_voltage);
+
+        static uint8_t current_bat_lvl = 0;
+
+        #define VOLTAGE_MEASURE_OFFSET  0.367f
+        #define VOLTAGE_LEVEL_CRITICAL  3.575f
+        #define VOLTAGE_LEVEL_LOW       3.65f
+        #define VOLTAGE_LEVEL_MID       3.975f
+
+        // Convert to a voltage value (we use a voltage divider on this pin)
+        float voltage = ( ( ((float)raw_voltage / 4095.0f) *  3.3f ) * 2.0f ) + VOLTAGE_MEASURE_OFFSET;
+
+        ESP_LOGI("VOUT:", "Voltage: %f", voltage);
+
+        uint8_t bat_lvl = 0;
+        static bool critical = false;
+        static bool critical_sent = false;
+
+        if(voltage <= VOLTAGE_LEVEL_CRITICAL)
+        {
+            critical = true;
+            bat_lvl = 1;
+        }
+        else if(voltage <= VOLTAGE_LEVEL_LOW)
+        {
+            bat_lvl = 1;
+        }
+        else if(voltage <= VOLTAGE_LEVEL_MID)
+        {
+            bat_lvl = 2;
+        }
+        else 
+        {
+            bat_lvl = 4;
+        }
+
+        global_live_data.bat_status.bat_lvl = bat_lvl;
+
+        if(critical && !critical_sent)
+        {
+            app_set_power_setting(POWER_CODE_CRITICAL);
+            critical_sent = true;
+            return false;
+        }
+    }
+
+    return true;
+}
+
+bool app_enable_internal_adc(uint8_t gpio)
+{
+    if(!_internal_adc_active)
+    {
+        ESP_ERROR_CHECK(adc_oneshot_io_to_channel(gpio, &_adc1, &_internal_adc_channel));
+        ESP_ERROR_CHECK(adc_oneshot_new_unit(&_adc_init_config1, &_adc1_handle));
+        adc_oneshot_chan_cfg_t config = {
+            .atten = ADC_ATTEN_DB_12,
+            .bitwidth = ADC_BITWIDTH_DEFAULT,
+        };
+
+        ESP_ERROR_CHECK(adc_oneshot_config_channel(_adc1_handle, _internal_adc_channel, &config));
+    }
+
+    _internal_adc_active = true;
+
+    // Perform first read and conversion
+    return app_process_internal_adc();
+}
+
+
+
 // Handle incoming input data
 // and call our input callback
 void bt_device_input(uint8_t* data, bool motion)
@@ -394,12 +492,29 @@ void bt_device_input(uint8_t* data, bool motion)
     uint8_t crc = data[1];
     bool crc_valid = false;
 
-    crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_input_s), crc);
+    crc_valid = crc8_verify(&(data[3]), sizeof(i2cinput_input_s)-1, crc); // Subtract 1 for legacy firmware support
     if(!crc_valid) return;
 
     _current_rx_packet_num = data[2];
 
     memcpy(&input_data, &(data[3]), sizeof(i2cinput_input_s));
+
+    if(_internal_adc_active)
+    {
+        bat_status_u s = {
+            .bat_lvl    = 4,
+            .charging   = 0,
+            .connection = 0
+        };
+
+        s.val = input_data.power_stat;
+
+        global_live_data.bat_status.charging = s.charging;
+    }
+    else 
+    {
+        global_live_data.bat_status.val = input_data.power_stat;
+    }
 
     _new_imu.ax = input_data.ax;
     _new_imu.ay = input_data.ay;
@@ -471,6 +586,20 @@ void bt_device_start(uint8_t *data)
 
     input_mode_t mode = data[2] & 0x7F;
 
+    bool enable_internal_adc = data[3] > 0 ? true : false;
+    uint8_t internal_adc_gpio= data[4];
+
+    if(enable_internal_adc)
+    {
+        bool adc_init_stat = app_enable_internal_adc(internal_adc_gpio);
+
+        if(!adc_init_stat)
+        {
+            printf("ADC Init FAIL\n");
+            return;
+        }
+    }
+
     global_live_data.rgb_gripl[0] = data[5];
     global_live_data.rgb_gripl[1] = data[6];
     global_live_data.rgb_gripl[2] = data[7];
@@ -518,14 +647,6 @@ void bt_device_start(uint8_t *data)
     {
     default:
         break;
-
-    //case INPUT_MODE_DS4:
-    //    break; // Disable for now
-    //    _bluetooth_input_cb = ds4_bt_sendinput;
-    //    ESP_LOGI(TAG, "DS4 BT Mode Init...");
-//
-    //    core_bt_ds4_start();
-    //    break;
 
     case INPUT_MODE_SWPRO:
         _bluetooth_input_cb = switch_bt_sendinput;
@@ -593,30 +714,6 @@ void update_timer_value()
         _timer_owned = false;
     }
 }
-
-/**
-int legacy_i2c_setup()
-{
-    //!< ESP32 slave address, you can set any 7bit value
-
-    int i2c_slave_port = I2C_SLAVE_NUM;
-    i2c_config_t conf_slave = {
-        .sda_io_num = I2C_SLAVE_SDA_IO,
-        .sda_pullup_en = GPIO_PULLUP_DISABLE,
-        .scl_io_num = I2C_SLAVE_SCL_IO,
-        .scl_pullup_en = GPIO_PULLUP_DISABLE,
-        .mode = I2C_MODE_SLAVE,
-        .slave.maximum_speed = 400 * 1000,
-        .slave.addr_10bit_en = 0,
-        .slave.slave_addr = ESP_SLAVE_ADDR,
-    };
-    esp_err_t err = i2c_param_config(i2c_slave_port, &conf_slave);
-    if (err != ESP_OK)
-    {
-        return err;
-    }
-    return i2c_driver_install(i2c_slave_port, conf_slave.mode, I2C_SLAVE_RX_BUF_LEN, I2C_SLAVE_TX_BUF_LEN, 0);
-}**/
 
 void app_main(void)
 {
@@ -729,5 +826,6 @@ void app_main(void)
 
         }
         vTaskDelay(1/portTICK_PERIOD_MS);
+        app_process_internal_adc();
     }
 }

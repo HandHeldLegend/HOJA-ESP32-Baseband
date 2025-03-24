@@ -77,21 +77,16 @@ void ns_report_settimer(uint8_t *buffer)
 
 void ns_report_setbattconn(uint8_t *buffer)
 {
-  typedef union
-  {
-    struct
-    {
-      uint8_t connection : 4;
-      uint8_t bat_lvl : 4;
-    };
-    uint8_t bat_status;
-  } bat_status_u;
-
   bat_status_u s = {
-      .bat_lvl = 8,
-      .connection = 0};
+    .bat_lvl    = 4,
+    .charging   = 0,
+    .connection = 0
+  };
+
+  s.val = global_live_data.bat_status.val;
+
   // Always set to USB connected
-  buffer[1] = s.bat_status;
+  buffer[1] = s.val;
 }
 
 void ns_report_sub_setdevinfo(uint8_t *buffer)
@@ -208,7 +203,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     // For now all options should shut down
     printf("Set HCI %X\n", data[10]);
     switch_bt_end_task();
-    app_set_power_setting(0); // Shut down
+    app_set_power_setting(POWER_CODE_OFF); // Shut down
     break;
 
   case SW_CMD_GET_SPI:

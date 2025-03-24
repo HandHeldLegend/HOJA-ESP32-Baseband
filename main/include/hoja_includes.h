@@ -1,7 +1,7 @@
 #ifndef HOJA_INCLUDES_H
 #define HOJA_INCLUDES_H
 
-#define HOJA_BASEBAND_VERSION 0xA022
+#define HOJA_BASEBAND_VERSION 0xA023
 #define HOJA_MAGIC_NUM 0x83FD
 #define HOJA_SETTINGS_NAMESPACE "hsettings"
 
@@ -32,6 +32,7 @@
 #include "esp_gap_bt_api.h"
 #include "esp_gap_ble_api.h"
 #include "esp_timer.h"
+#include "esp_adc/adc_oneshot.h"
 
 #include "nvs.h"
 #include "nvs_flash.h"
@@ -127,7 +128,11 @@ typedef struct
     int16_t gx;
     int16_t gy;
     int16_t gz;
+
+    uint8_t power_stat;
 } __attribute__ ((packed)) i2cinput_input_s;
+
+#define I2CINPUT_INPUT_SIZE sizeof(i2cinput_input_s)
 
 #include "hoja.h"
 

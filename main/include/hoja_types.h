@@ -76,6 +76,19 @@ typedef struct
     bool retrieved;
 } imu_data_s;
 
+typedef union
+{
+    struct
+    {
+        uint8_t power_source : 1;
+        uint8_t connection : 2;
+        uint8_t reserved : 1;
+        uint8_t charging : 1;
+        uint8_t bat_lvl : 3;
+    };
+    uint8_t val;
+} bat_status_u;
+
 typedef struct
 {
     uint16_t magic;
@@ -97,17 +110,19 @@ typedef struct
     uint8_t paired_host_xinput_mac[6];
 } hoja_settings_s;
 
-extern hoja_settings_s global_loaded_settings;
+typedef struct 
+{
+    uint8_t rgb_gripl[3];
+    uint8_t rgb_gripr[3];
+    uint8_t rgb_body[3];
+    uint8_t rgb_buttons[3];
+    bat_status_u bat_status;
+} hoja_live_s;
 
-typedef union
-  {
-    struct
-    {
-      uint8_t connection  : 4; // 1 is charging, 0 is not connected
-      uint8_t bat_lvl     : 4; // 0-8 battery level
-    };
-    uint8_t bat_status;
-  } switch_battery_status_u;
+extern hoja_settings_s global_loaded_settings;
+extern hoja_live_s global_live_data;
+
+
 
 // Status return data types
 typedef enum
@@ -120,6 +135,13 @@ typedef enum
     I2C_STATUS_POWER_CODE, // Change power setting
     I2C_STATUS_MAC_UPDATE, // Update HOST save MAC address
 } i2cinput_status_t;
+
+typedef enum 
+{
+    POWER_CODE_OFF = 0, 
+    POWER_CODE_RESET = 1,
+    POWER_CODE_CRITICAL = 2,
+} i2c_power_code_t;
 
 typedef enum
 {

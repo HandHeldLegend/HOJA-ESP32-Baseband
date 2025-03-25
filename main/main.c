@@ -416,8 +416,8 @@ bool app_process_internal_adc()
         static uint8_t current_bat_lvl = 0;
 
         #define VOLTAGE_MEASURE_OFFSET  0.367f
-        #define VOLTAGE_LEVEL_CRITICAL  3.575f
-        #define VOLTAGE_LEVEL_LOW       3.65f
+        #define VOLTAGE_LEVEL_CRITICAL  3.125f
+        #define VOLTAGE_LEVEL_LOW       3.3f
         #define VOLTAGE_LEVEL_MID       3.975f
 
         // Convert to a voltage value (we use a voltage divider on this pin)

@@ -93,10 +93,11 @@ int bt_register_app(util_bt_app_params_s *util_bt_app_params, esp_hid_device_con
     util_bt_hid_mode = UTIL_BT_MODE_CLASSIC;
 
     esp_bt_cod_t hid_cod;
-    hid_cod.minor = 0x2 ;
-    hid_cod.major = 0x5;
-    hid_cod.service = 0x400;
-    esp_bt_gap_set_cod(hid_cod, ESP_BT_SET_COD_MAJOR_MINOR);
+
+    uint32_t cod = 0x002508;
+
+    memcpy(&hid_cod, &cod, sizeof(uint32_t));
+    esp_bt_gap_set_cod(hid_cod, ESP_BT_INIT_COD);
 
     esp_bt_sp_param_t param_type = ESP_BT_SP_IOCAP_MODE;
     esp_bt_io_cap_t iocap = ESP_BT_IO_CAP_NONE;

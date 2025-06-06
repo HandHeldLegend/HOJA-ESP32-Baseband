@@ -22,7 +22,7 @@ extern const uint8_t dinput_hid_report_descriptor[DINPUT_HID_REPORT_MAP_LEN];
 extern const uint8_t xinput_hid_report_descriptor[XINPUT_HID_REPORT_MAP_LEN];
 
 #define PROCON_SHORT_HID_REPORT_MAP_LEN 134
-#define PROCON_HID_REPORT_MAP_LEN 213
+#define PROCON_HID_REPORT_MAP_LEN 170
 extern const uint8_t procon_hid_descriptor[PROCON_HID_REPORT_MAP_LEN];
 extern const uint8_t procon_hid_descriptor_short[PROCON_SHORT_HID_REPORT_MAP_LEN];
 

@@ -321,6 +321,12 @@ void switch_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         break;
     }
 
+    case ESP_BT_GAP_ENC_CHG_EVT:
+    {
+
+        break;
+    }
+
     case ESP_BT_GAP_MODE_CHG_EVT:
     {
         // Depreciated, not needed I guess

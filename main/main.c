@@ -411,7 +411,7 @@ bool app_process_internal_adc()
         ESP_ERROR_CHECK(adc_oneshot_read(_adc1_handle, _internal_adc_channel, &reading));
         uint16_t raw_voltage = (uint16_t) reading;
 
-        ESP_LOGI("VRAW:", "Raw Voltage: %d", raw_voltage);
+        // ESP_LOGI("VRAW:", "Raw Voltage: %d", raw_voltage);
 
         static uint8_t current_bat_lvl = 0;
 
@@ -423,7 +423,7 @@ bool app_process_internal_adc()
         // Convert to a voltage value (we use a voltage divider on this pin)
         float voltage = ( ( ((float)raw_voltage / 4095.0f) *  3.3f ) * 2.0f ) + VOLTAGE_MEASURE_OFFSET;
 
-        ESP_LOGI("VOUT:", "Voltage: %f", voltage);
+        // ESP_LOGI("VOUT:", "Voltage: %f", voltage);
 
         uint8_t bat_lvl = 0;
         static bool critical = false;

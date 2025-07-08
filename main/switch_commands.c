@@ -3,7 +3,6 @@
 
 uint8_t _switch_input_buffer[64] = {0};
 uint8_t _switch_input_report_id = 0x00;
-uint8_t _switch_imu_mode = 0x00;
 
 void ns_report_clear(uint8_t *buffer, uint16_t size)
 {
@@ -25,54 +24,13 @@ void ns_report_setsubcmd(uint8_t *buffer, uint8_t command)
   buffer[13] = command;
 }
 
-uint32_t adapter_ll_get_timestamp_us()
-{
-  int64_t t = esp_timer_get_time();
-
-  if (t > 0xFFFFFFFF)
-    t -= 0xFFFFFFFF;
-  return (uint32_t)t;
-}
-
 void ns_report_settimer(uint8_t *buffer)
 {
-  static uint32_t last_time;
-  uint32_t time;
-  static uint32_t accumulated_delta = 0;
+  static uint64_t time;
 
-  static uint32_t output_time = 0;
+  time = get_timestamp_ms();
 
-  time = get_timestamp_us();
-  uint32_t delta = 0;
-  uint32_t whole = 0;
-  // Increment only by changed time
-  if (time < last_time)
-  {
-    delta = (0xFFFFFFFF - last_time) + time;
-  }
-  else if (time >= last_time)
-  {
-    delta = time - last_time;
-  }
-
-  last_time = time;
-
-  if(delta > 1000)
-  {
-    whole = delta;
-    delta %= 1000;
-    whole -= delta;
-    whole /= 1000; // Convert to ms
-    // Increment for the next cycle
-    output_time += whole;
-    output_time %= 0xFF;
-  }
-  else{
-    output_time += 1;
-    output_time %= 0xFF;
-  }
-
-  buffer[0] = (uint8_t)output_time;
+  buffer[0] = (uint8_t) (time % 0xFF);
 }
 
 void ns_report_setbattconn(uint8_t *buffer)
@@ -153,7 +111,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
   ns_report_setbattconn(_switch_input_buffer);
 
   // Fill input portion
-  ns_report_setinputreport_full(_switch_input_buffer, &_switch_input_data);
+  ns_report_setinputreport_full(_switch_input_buffer);
 
   // Set report ID
   // not needed it's 0x21
@@ -172,7 +130,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
 
   case SW_CMD_ENABLE_IMU:
     printf("Enable IMU: %d\n", data[10]);
-    _switch_imu_mode = (data[10]);
+    ns_set_imu_mode(data[10]);
     ns_report_setack(0x80);
     break;
 
@@ -184,7 +142,7 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
   case SW_CMD_SET_INPUTMODE:
     printf("Input mode change: %X\n", data[10]);
     ns_report_setack(0x80);
-    ns_controller_setinputreportmode(data[10]);
+    //ns_controller_setinputreportmode(data[10]);
     break;
 
   case SW_CMD_GET_DEVICEINFO:
@@ -305,8 +263,6 @@ void ns_subcommand_handler(uint8_t subcommand, uint8_t *data, uint16_t len)
     ns_report_setack(0x80);
     break;
   }
-
-  ns_reset_report_spacer();
   esp_bt_hid_device_send_report(ESP_HIDD_REPORT_TYPE_INTRDATA, 0x21, SWITCH_BT_REPORT_SIZE, _switch_input_buffer);
 }
 
@@ -331,145 +287,7 @@ void ns_report_handler(uint8_t report_id, uint8_t *data, uint16_t len)
   }
 }
 
-void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data)
-{
 
-  // Set input data
-  buffer[2] = input_data->right_buttons;
-  buffer[3] = input_data->shared_buttons;
-  buffer[4] = input_data->left_buttons;
-
-  // Set sticks directly
-  // Saves cycles :)
-  buffer[5] = (input_data->ls_x & 0xFF);
-  buffer[6] = (input_data->ls_x & 0xF00) >> 8;
-  // ns_input_report[7] |= (g_stick_data.lsy & 0xF) << 4;
-  buffer[7] = (input_data->ls_y & 0xFF0) >> 4;
-  buffer[8] = (input_data->rs_x & 0xFF);
-  buffer[9] = (input_data->rs_x & 0xF00) >> 8;
-  buffer[10] = (input_data->rs_y & 0xFF0) >> 4;
-
-  if (_switch_imu_mode == 0x01)
-  {
-    // Set gyro
-    // Retrieve and write IMU data
-    imu_data_s *_imu_tmp = imu_fifo_last();
-
-    // Group 1
-    buffer[12] = _imu_tmp->ay_8l; // Y-axis
-    buffer[13] = _imu_tmp->ay_8h;
-    buffer[14] = _imu_tmp->ax_8l; // X-axis
-    buffer[15] = _imu_tmp->ax_8h;
-    buffer[16] = _imu_tmp->az_8l; // Z-axis
-    buffer[17] = _imu_tmp->az_8h;
-
-    buffer[18] = _imu_tmp->gy_8l;
-    buffer[19] = _imu_tmp->gy_8h;
-    buffer[20] = _imu_tmp->gx_8l;
-    buffer[21] = _imu_tmp->gx_8h;
-    buffer[22] = _imu_tmp->gz_8l;
-    buffer[23] = _imu_tmp->gz_8h;
-
-    _imu_tmp = imu_fifo_last();
-
-    // Group 2
-    buffer[24] = _imu_tmp->ay_8l; // Y-axis
-    buffer[25] = _imu_tmp->ay_8h;
-    buffer[26] = _imu_tmp->ax_8l; // X-axis
-    buffer[27] = _imu_tmp->ax_8h;
-    buffer[28] = _imu_tmp->az_8l; // Z-axis
-    buffer[29] = _imu_tmp->az_8h;
-
-    buffer[30] = _imu_tmp->gy_8l;
-    buffer[31] = _imu_tmp->gy_8h;
-    buffer[32] = _imu_tmp->gx_8l;
-    buffer[33] = _imu_tmp->gx_8h;
-    buffer[34] = _imu_tmp->gz_8l;
-    buffer[35] = _imu_tmp->gz_8h;
-
-    _imu_tmp = imu_fifo_last();
-
-    // Group 3
-    buffer[36] = _imu_tmp->ay_8l; // Y-axis
-    buffer[37] = _imu_tmp->ay_8h;
-    buffer[38] = _imu_tmp->ax_8l; // X-axis
-    buffer[39] = _imu_tmp->ax_8h;
-    buffer[40] = _imu_tmp->az_8l; // Z-axis
-    buffer[41] = _imu_tmp->az_8h;
-
-    buffer[42] = _imu_tmp->gy_8l;
-    buffer[43] = _imu_tmp->gy_8h;
-    buffer[44] = _imu_tmp->gx_8l;
-    buffer[45] = _imu_tmp->gx_8h;
-    buffer[46] = _imu_tmp->gz_8l;
-    buffer[47] = _imu_tmp->gz_8h;
-  }
-  else if (_switch_imu_mode == 0x02)
-  {
-    static mode_2_s mode_2_data = {0};
-
-    imu_pack_quat(&mode_2_data);
-
-    memcpy(&(buffer[12]), &mode_2_data, sizeof(mode_2_s));
-  }
-}
-
-typedef union
-{
-  struct
-  {
-    uint8_t down : 1;
-    uint8_t right : 1;
-    uint8_t left : 1;
-    uint8_t up : 1;
-    uint8_t sl : 1;
-    uint8_t sr : 1;
-    uint8_t reserved : 2;
-  };
-  uint8_t button_status;
-} short_buttons_1_u;
-
-typedef union
-{
-  struct
-  {
-    uint8_t minus : 1;
-    uint8_t plus : 1;
-    uint8_t lstick : 1;
-    uint8_t rstick : 1;
-    uint8_t home : 1;
-    uint8_t capture : 1;
-    uint8_t lr : 1;
-    uint8_t zlzr : 1;
-  };
-  uint8_t button_status;
-} short_buttons_2_u;
-
-// Sets the input report for short mode.
-void _ns_report_setinputreport_short(uint8_t *buffer, sw_input_s *input_data)
-{
-
-  static short_buttons_1_u short_buttons_1;
-  static short_buttons_2_u short_buttons_2;
-  short_buttons_1.down = input_data->b_b;
-  short_buttons_1.right = input_data->b_a;
-  short_buttons_1.left = input_data->b_y;
-  short_buttons_1.up = input_data->b_x;
-
-  buffer[0] = short_buttons_1.button_status;
-  buffer[1] = 0;
-  buffer[2] = 0x8; // ns_input_short.stick_hat;
-
-  // To-do: Sticks
-  buffer[3] = input_data->ls_x & 0xFF;
-  buffer[4] = (input_data->ls_x >> 8);
-  buffer[5] = input_data->ls_y & 0xFF;
-  buffer[6] = input_data->ls_y >> 8;
-  buffer[7] = input_data->rs_x & 0xFF;
-  buffer[8] = input_data->rs_x >> 8;
-  buffer[9] = input_data->rs_y & 0xFF;
-  buffer[10] = input_data->rs_y >> 8;
-}
 
 void ns_report_bulkset(uint8_t *buffer, uint8_t start_idx, uint8_t *data, uint8_t len)
 {

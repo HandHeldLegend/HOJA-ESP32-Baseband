@@ -96,18 +96,18 @@ typedef struct
     // Mac address of this device
     uint8_t device_mac_switch[6];
 
-    uint8_t device_mac_gamecube[6];
+    uint8_t device_mac_depreciated[6];
 
-    uint8_t device_mac_xinput[6];
+    uint8_t device_mac_sinput[6];
 
     // Mac address of the Switch we are paired to
     uint8_t paired_host_switch_mac[6];
 
-    // Mac address of the GameCube we are paired to
-    uint8_t paired_host_gamecube_mac[6];
+    // DEPRECIATED
+    uint8_t paired_host_depreciated_mac[6];
 
-    // Mac address of the XInput we are paired to
-    uint8_t paired_host_xinput_mac[6];
+    // Mac address of the SInput we are paired to
+    uint8_t paired_host_sinput_mac[6];
 } hoja_settings_s;
 
 typedef struct 
@@ -117,12 +117,12 @@ typedef struct
     uint8_t rgb_body[3];
     uint8_t rgb_buttons[3];
     bat_status_u bat_status;
+    uint16_t vendor_id;
+    uint16_t product_id;
 } hoja_live_s;
 
 extern hoja_settings_s global_loaded_settings;
 extern hoja_live_s global_live_data;
-
-
 
 // Status return data types
 typedef enum
@@ -134,6 +134,7 @@ typedef enum
     I2C_STATUS_CONNECTED_STATUS, // Connected status change
     I2C_STATUS_POWER_CODE, // Change power setting
     I2C_STATUS_MAC_UPDATE, // Update HOST save MAC address
+    I2C_STATUS_HAPTIC_SINPUT, // SInput Haptic Pattern
 } i2cinput_status_t;
 
 typedef enum 
@@ -154,82 +155,17 @@ typedef enum
 typedef struct
 {
     uint8_t cmd;
-    uint32_t rand_seed; // Random data to help our CRC
-    uint8_t data[10]; // Buffer for related data   
+    uint16_t rand_seed; // Random data to help our CRC
+    uint8_t data[19]; // Buffer for related data   
 } __attribute__ ((packed)) i2cinput_status_s;
+
+// 22 bytes
+#define I2CINPUT_STATUS_SIZE sizeof(i2cinput_status_s)
 
 typedef struct
 {
     uint8_t haptic_data[11]; // Value representing haptic information
 } __attribute__ ((packed)) i2cinput_switch_haptic_s;
-
-  typedef struct
-{
-    union
-    {
-        struct
-        {
-            // Y and C-Up (N64)
-            uint8_t b_y       : 1;
-
-            // X and C-Left (N64)
-            uint8_t b_x       : 1;
-
-            uint8_t b_b       : 1;
-            uint8_t b_a       : 1;
-            uint8_t t_r_sr    : 1;
-            uint8_t t_r_sl    : 1;
-            uint8_t t_r       : 1;
-
-            // ZR and C-Down (N64)
-            uint8_t t_zr      : 1;
-        };
-        uint8_t right_buttons;
-    };
-    union
-    {
-        struct
-        {
-            // Minus and C-Right (N64)
-            uint8_t b_minus     : 1;
-
-            // Plus and Start
-            uint8_t b_plus      : 1;
-
-            uint8_t sb_right    : 1;
-            uint8_t sb_left     : 1;
-            uint8_t b_home      : 1;
-            uint8_t b_capture   : 1;
-            uint8_t none        : 1;
-            uint8_t charge_grip_active : 1;
-        };
-        uint8_t shared_buttons;
-    };
-    union
-    {
-        struct
-        {
-            uint8_t d_down    : 1;
-            uint8_t d_up      : 1;
-            uint8_t d_right   : 1;
-            uint8_t d_left    : 1;
-            uint8_t t_l_sr    : 1;
-            uint8_t t_l_sl    : 1;
-            uint8_t t_l       : 1;
-
-            // ZL and Z (N64)
-            uint8_t t_zl      : 1;
-
-        };
-        uint8_t left_buttons;
-    };
-
-    uint16_t ls_x;
-    uint16_t ls_y;
-    uint16_t rs_x;
-    uint16_t rs_y;
-
-} __attribute__ ((packed)) sw_input_s;
 
 typedef struct
 {

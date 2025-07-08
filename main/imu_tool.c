@@ -17,9 +17,8 @@ imu_data_s* imu_fifo_last()
 void imu_pack_quat(mode_2_s *out)
 {
   out->mode = 2;
-  static uint32_t last_time;
-  uint32_t time;
-  static uint32_t accumulated_delta = 0;
+
+  static uint64_t time_ms;
 
   // Determine maximum quat component
   uint8_t max_index = 0;
@@ -57,6 +56,7 @@ void imu_pack_quat(mode_2_s *out)
   out->delta_mid_avg_2 = 0;
 
   // Timestamps handling is still a bit unclear, these are the values that motion_data in no drifting 
+  time_ms = get_timestamp_ms();
   out->timestamp_start_l = _imu_quat_state.timestamp & 0x1;
   out->timestamp_start_h = (_imu_quat_state.timestamp  >> 1) & 0x3FF;
   out->timestamp_count = 3;
@@ -64,36 +64,6 @@ void imu_pack_quat(mode_2_s *out)
   out->accel_0.x = _imu_quat_state.ax;
   out->accel_0.y = _imu_quat_state.ay;
   out->accel_0.z = _imu_quat_state.az;
-
-  time = get_timestamp_us();
-  uint32_t delta = 0;
-  uint32_t whole = 0;
-  // Increment only by changed time
-  if (time < last_time)
-  {
-    delta = (0xFFFFFFFF - last_time) + time;
-  }
-  else if (time >= last_time)
-  {
-    delta = time - last_time;
-  }
-
-  last_time = time;
-
-  if(delta > 1000)
-  {
-    whole = delta;
-    delta %= 1000;
-    whole -= delta;
-    whole /= 1000; // Convert to ms
-    // Increment for the next cycle
-    _imu_quat_state.timestamp += whole;
-    _imu_quat_state.timestamp %= 0x7FF;
-  }
-  else{
-    _imu_quat_state.timestamp += 1;
-    _imu_quat_state.timestamp %= 0x7FF;
-  }
 }
 
 void _imu_rotate_quaternion(quaternion_s *first, quaternion_s *second) {

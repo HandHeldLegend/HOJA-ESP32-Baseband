@@ -62,7 +62,7 @@ typedef enum
     INPUT_MODE_GAMECUBE = 3,
     INPUT_MODE_N64      = 4,
     INPUT_MODE_SNES     = 5,
-    INPUT_MODE_DS4      = 6,
+    INPUT_MODE_SINPUT   = 6,
     INPUT_MODE_MAX,
 } input_mode_t;
 
@@ -110,7 +110,11 @@ typedef struct
             uint8_t button_capture  : 1;
             uint8_t button_home     : 1;
             uint8_t button_safemode : 1;
-            uint8_t padding         : 5;
+            uint8_t button_shipping : 1;
+            uint8_t button_sync     : 1;
+            uint8_t button_unbind   : 1;
+            uint8_t trigger_gl      : 1;
+            uint8_t trigger_gr      : 1;
         };
         uint8_t buttons_system;
     };
@@ -140,14 +144,8 @@ typedef struct
 #include "switch_commands.h"
 #include "switch_spi.h"
 
-#include "core_bt_xinput.h"
 #include "core_bt_switch.h"
-#include "core_bt_gamecube.h"
-#include "core_bt_ds4.h"
+#include "core_bt_sinput.h"
 #include "util_bt_hid.h"
-
-#include "rsc_descriptors.h"
-
-
 
 #endif 

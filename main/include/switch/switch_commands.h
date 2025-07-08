@@ -37,8 +37,7 @@ void ns_report_settimer(uint8_t *buffer);
 void ns_report_setbattconn(uint8_t *buffer);
 void ns_report_sub_setdevinfo(uint8_t *buffer);
 void ns_report_sub_triggertime(uint8_t *buffer, uint16_t time_10_ms);
-void ns_report_setinputreport_full(uint8_t *buffer, sw_input_s *input_data);
 void ns_report_bulkset(uint8_t *buffer, uint8_t start_idx, uint8_t* data, uint8_t len);
-void _ns_report_setinputreport_short(uint8_t *buffer, sw_input_s *input_data);
+
 
 #endif

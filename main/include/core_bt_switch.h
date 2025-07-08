@@ -7,12 +7,12 @@
 #include "hoja_includes.h"
 #include "hoja.h"
 
-extern sw_input_s _switch_input_data;
-
+void ns_report_setinputreport_full(uint8_t *buffer);
+void ns_set_imu_mode(uint8_t mode);
 void switch_bt_end_task();
 void ns_reset_report_spacer();
 
-void ns_controller_setinputreportmode(uint8_t report_mode);
+// void ns_controller_setinputreportmode(uint8_t report_mode);
 
 // Start the Nintendo Switch controller core
 int core_bt_switch_start();

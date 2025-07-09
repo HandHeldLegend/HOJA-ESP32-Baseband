@@ -1,52 +1,296 @@
 #include "core_bt_switch.h"
 #include "esp_log.h"
 
+typedef struct
+{
+    union
+    {
+        struct
+        {
+            // Y and C-Up (N64)
+            uint8_t b_y       : 1;
+
+            // X and C-Left (N64)
+            uint8_t b_x       : 1;
+
+            uint8_t b_b       : 1;
+            uint8_t b_a       : 1;
+            uint8_t t_r_sr    : 1;
+            uint8_t t_r_sl    : 1;
+            uint8_t t_r       : 1;
+
+            // ZR and C-Down (N64)
+            uint8_t t_zr      : 1;
+        };
+        uint8_t right_buttons;
+    };
+    union
+    {
+        struct
+        {
+            // Minus and C-Right (N64)
+            uint8_t b_minus     : 1;
+
+            // Plus and Start
+            uint8_t b_plus      : 1;
+
+            uint8_t sb_right    : 1;
+            uint8_t sb_left     : 1;
+            uint8_t b_home      : 1;
+            uint8_t b_capture   : 1;
+            uint8_t none        : 1;
+            uint8_t charge_grip_active : 1;
+        };
+        uint8_t shared_buttons;
+    };
+    union
+    {
+        struct
+        {
+            uint8_t d_down    : 1;
+            uint8_t d_up      : 1;
+            uint8_t d_right   : 1;
+            uint8_t d_left    : 1;
+            uint8_t t_l_sr    : 1;
+            uint8_t t_l_sl    : 1;
+            uint8_t t_l       : 1;
+
+            // ZL and Z (N64)
+            uint8_t t_zl      : 1;
+
+        };
+        uint8_t left_buttons;
+    };
+
+    uint16_t ls_x;
+    uint16_t ls_y;
+    uint16_t rs_x;
+    uint16_t rs_y;
+
+} __attribute__ ((packed)) sw_input_s;
+
+#define HID_PROD_NSPRO  0x2009
+#define HID_VEND_NSPRO  0x057E
+#define PROCON_HID_REPORT_MAP_LEN 170
+
+const uint8_t procon_hid_descriptor[PROCON_HID_REPORT_MAP_LEN] = {
+    0x05, 0x01,        // Usage Page (Generic Desktop Ctrls)
+    0x09, 0x05,        // Usage (Game Pad)
+    0xA1, 0x01,        // Collection (Application)
+    0x06, 0x01, 0xFF,  //   Usage Page (Vendor Defined 0xFF01)
+
+    0x85, 0x21,  //   Report ID (33)
+    0x09, 0x21,  //   Usage (0x21)
+    0x75, 0x08,  //   Report Size (8)
+    0x95, 0x30,  //   Report Count (48)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+
+    0x85, 0x30,  //   Report ID (48)
+    0x09, 0x30,  //   Usage (0x30)
+    0x75, 0x08,  //   Report Size (8)
+    0x95, 0x30,  //   Report Count (48)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+
+    0x85, 0x31,        //   Report ID (49)
+    0x09, 0x31,        //   Usage (0x31)
+    0x75, 0x08,        //   Report Size (8)
+    0x96, 0x69, 0x01,  //   Report Count (361)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+
+    0x85, 0x32,        //   Report ID (50)
+    0x09, 0x32,        //   Usage (0x32)
+    0x75, 0x08,        //   Report Size (8)
+    0x96, 0x69, 0x01,  //   Report Count (361)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+
+    0x85, 0x33,        //   Report ID (51)
+    0x09, 0x33,        //   Usage (0x33)
+    0x75, 0x08,        //   Report Size (8)
+    0x96, 0x69, 0x01,  //   Report Count (361)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+
+    0x85, 0x3F,  //   Report ID (63)
+    0x05, 0x09,  //   Usage Page (Button)
+    0x19, 0x01,  //   Usage Minimum (0x01)
+    0x29, 0x10,  //   Usage Maximum (0x10)
+    0x15, 0x00,  //   Logical Minimum (0)
+    0x25, 0x01,  //   Logical Maximum (1)
+    0x75, 0x01,  //   Report Size (1)
+    0x95, 0x10,  //   Report Count (16)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+    0x05, 0x01,  //   Usage Page (Generic Desktop Ctrls)
+    0x09, 0x39,  //   Usage (Hat switch)
+    0x15, 0x00,  //   Logical Minimum (0)
+    0x25, 0x07,  //   Logical Maximum (7)
+    0x75, 0x04,  //   Report Size (4)
+    0x95, 0x01,  //   Report Count (1)
+    0x81, 0x42,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,Null
+                 //   State)
+    0x05, 0x09,  //   Usage Page (Button)
+    0x75, 0x04,  //   Report Size (4)
+    0x95, 0x01,  //   Report Count (1)
+    0x81, 0x01,  //   Input (Const,Array,Abs,No Wrap,Linear,Preferred State,No
+                 //   Null Position)
+    0x05, 0x01,  //   Usage Page (Generic Desktop Ctrls)
+    0x09, 0x30,  //   Usage (X)
+    0x09, 0x31,  //   Usage (Y)
+    0x09, 0x33,  //   Usage (Rx)
+    0x09, 0x34,  //   Usage (Ry)
+    0x16, 0x00, 0x00,              //   Logical Minimum (0)
+    0x27, 0xFF, 0xFF, 0x00, 0x00,  //   Logical Maximum (65534)
+    0x75, 0x10,                    //   Report Size (16)
+    0x95, 0x04,                    //   Report Count (4)
+    0x81, 0x02,  //   Input (Data,Var,Abs,No Wrap,Linear,Preferred State,No Null
+                 //   Position)
+                 
+    0x06, 0x01, 0xFF,  //   Usage Page (Vendor Defined 0xFF01)
+
+    0x85, 0x01,  //   Report ID (1)
+    0x09, 0x01,  //   Usage (0x01)
+    0x75, 0x08,  //   Report Size (8)
+    0x95, 0x30,  //   Report Count (48)
+    0x91, 0x02,  //   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No
+                 //   Null Position,Non-volatile)
+
+    0x85, 0x10,  //   Report ID (16)
+    0x09, 0x10,  //   Usage (0x10)
+    0x75, 0x08,  //   Report Size (8)
+    0x95, 0x09,  //   Report Count (9)
+    0x91, 0x02,  //   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No
+                 //   Null Position,Non-volatile)
+
+    0x85, 0x11,  //   Report ID (17)
+    0x09, 0x11,  //   Usage (0x11)
+    0x75, 0x08,  //   Report Size (8)
+    0x95, 0x30,  //   Report Count (48)
+    0x91, 0x02,  //   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No
+                 //   Null Position,Non-volatile)
+
+    0x85, 0x12,  //   Report ID (18)
+    0x09, 0x12,  //   Usage (0x12)
+    0x75, 0x08,  //   Report Size (8)
+    0x95, 0x30,  //   Report Count (48)
+    0x91, 0x02,  //   Output (Data,Var,Abs,No Wrap,Linear,Preferred State,No
+                 //   Null Position,Non-volatile)
+    0xC0,        // End Collection
+};
+
 #define DEFAULT_TICK_DELAY (8/portTICK_PERIOD_MS)
 #define DEFAULT_US_DELAY (8*1000)
 static volatile bool        _hid_connected = false;
-static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
-static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
-static volatile bool        _sniff = true;
+
 static volatile bool        _switch_paired = false;
+uint8_t _switch_imu_mode = 0x00;
 
 interval_s _ns_interval = {0};
 
-void ns_reset_report_spacer()
+sw_input_s _switch_input_data = {.ls_x = 2047, .ls_y = 2047, .rs_x = 2047, .rs_y = 2047};
+
+void ns_set_imu_mode(uint8_t mode)
 {
-    uint32_t timestamp = get_timestamp_us();
-    interval_resettable_run(timestamp, _delay_time_us, true, &_ns_interval);
+    _switch_imu_mode = mode;
 }
 
-void ns_send_check_blocking()
+void ns_report_setinputreport_full(uint8_t *buffer)
 {
-    bool ok_to_send = false;
-    uint32_t timestamp = 0;
-    uint32_t fail_timer = 1000;
-    while(!ok_to_send)
-    {
-        timestamp = get_timestamp_us();
-        if(interval_run(timestamp, _delay_time_us, &_ns_interval))
-        {
-            ok_to_send = true;
-        }
-        else
-        {
-            fail_timer-=1;
-            vTaskDelay(1/portTICK_PERIOD_MS);
-        }
+  // Set input data
+  buffer[2] = _switch_input_data.right_buttons;
+  buffer[3] = _switch_input_data.shared_buttons;
+  buffer[4] = _switch_input_data.left_buttons;
 
-        if(!fail_timer)
-        {
-            ns_reset_report_spacer();
-            return;
-        }
-    }
+  // Set sticks directly
+  // Saves cycles :)
+  buffer[5] = (_switch_input_data.ls_x & 0xFF);
+  buffer[6] = (_switch_input_data.ls_x & 0xF00) >> 8;
+  // ns_input_report[7] |= (g_stick_data.lsy & 0xF) << 4;
+  buffer[7] = (_switch_input_data.ls_y & 0xFF0) >> 4;
+  buffer[8] = (_switch_input_data.rs_x & 0xFF);
+  buffer[9] = (_switch_input_data.rs_x & 0xF00) >> 8;
+  buffer[10] = (_switch_input_data.rs_y & 0xFF0) >> 4;
+
+  if (_switch_imu_mode == 0x01)
+  {
+    // Set gyro
+    // Retrieve and write IMU data
+    imu_data_s *_imu_tmp = imu_fifo_last();
+
+    // Group 1
+    buffer[12] = _imu_tmp->ay_8l; // Y-axis
+    buffer[13] = _imu_tmp->ay_8h;
+    buffer[14] = _imu_tmp->ax_8l; // X-axis
+    buffer[15] = _imu_tmp->ax_8h;
+    buffer[16] = _imu_tmp->az_8l; // Z-axis
+    buffer[17] = _imu_tmp->az_8h;
+
+    buffer[18] = _imu_tmp->gy_8l;
+    buffer[19] = _imu_tmp->gy_8h;
+    buffer[20] = _imu_tmp->gx_8l;
+    buffer[21] = _imu_tmp->gx_8h;
+    buffer[22] = _imu_tmp->gz_8l;
+    buffer[23] = _imu_tmp->gz_8h;
+
+    _imu_tmp = imu_fifo_last();
+
+    // Group 2
+    buffer[24] = _imu_tmp->ay_8l; // Y-axis
+    buffer[25] = _imu_tmp->ay_8h;
+    buffer[26] = _imu_tmp->ax_8l; // X-axis
+    buffer[27] = _imu_tmp->ax_8h;
+    buffer[28] = _imu_tmp->az_8l; // Z-axis
+    buffer[29] = _imu_tmp->az_8h;
+
+    buffer[30] = _imu_tmp->gy_8l;
+    buffer[31] = _imu_tmp->gy_8h;
+    buffer[32] = _imu_tmp->gx_8l;
+    buffer[33] = _imu_tmp->gx_8h;
+    buffer[34] = _imu_tmp->gz_8l;
+    buffer[35] = _imu_tmp->gz_8h;
+
+    _imu_tmp = imu_fifo_last();
+
+    // Group 3
+    buffer[36] = _imu_tmp->ay_8l; // Y-axis
+    buffer[37] = _imu_tmp->ay_8h;
+    buffer[38] = _imu_tmp->ax_8l; // X-axis
+    buffer[39] = _imu_tmp->ax_8h;
+    buffer[40] = _imu_tmp->az_8l; // Z-axis
+    buffer[41] = _imu_tmp->az_8h;
+
+    buffer[42] = _imu_tmp->gy_8l;
+    buffer[43] = _imu_tmp->gy_8h;
+    buffer[44] = _imu_tmp->gx_8l;
+    buffer[45] = _imu_tmp->gx_8h;
+    buffer[46] = _imu_tmp->gz_8l;
+    buffer[47] = _imu_tmp->gz_8h;
+  }
+  else if (_switch_imu_mode == 0x02)
+  {
+    static mode_2_s mode_2_data = {0};
+
+    imu_pack_quat(&mode_2_data);
+
+    memcpy(&(buffer[12]), &mode_2_data, sizeof(mode_2_s));
+  }
 }
 
-bool ns_send_check_nonblocking()
+void _ns_reset_report_spacer()
 {
-    uint32_t timestamp = get_timestamp_us();
-    return interval_run(timestamp, _delay_time_us, &_ns_interval);
+    uint64_t timestamp = get_timestamp_us();
+    uint64_t delay_time = app_get_report_timer();
+    interval_resettable_run(timestamp, delay_time, true, &_ns_interval);
+}
+
+bool _ns_send_check_nonblocking()
+{
+    uint64_t timestamp = get_timestamp_us();
+    uint64_t delay_time = app_get_report_timer();
+    return interval_run(timestamp, delay_time, &_ns_interval);
 }
 
 /**
@@ -82,12 +326,11 @@ typedef enum
 TaskHandle_t _switch_bt_task_handle = NULL;
 ns_power_handle_t _switch_power_state = NS_POWER_AWAKE;
 
-sw_input_s _switch_input_data = {.ls_x = 2047, .ls_y = 2047, .rs_x = 2047, .rs_y = 2047};
 
 void _switch_bt_task_standard(void *parameters);
 void _switch_bt_task_empty(void *parameters);
 void _switch_bt_task_short(void *parameters);
-void ns_controller_input_task_set(ns_report_mode_t report_mode_type);
+
 
 void switch_bt_end_task()
 {
@@ -97,86 +340,6 @@ void switch_bt_end_task()
     }
 }
 
-void ns_controller_setinputreportmode(uint8_t report_mode)
-{
-    return; // Debug do nothing
-    char *TAG = "ns_controller_setinputreportmode";
-
-    ESP_LOGI(TAG, "Switching to input mode: %04x", report_mode);
-    switch (report_mode)
-    {
-    // Standard
-    case 0x30:
-        ESP_LOGI(TAG, "Setting standard report mode.");
-        ns_controller_input_task_set(NS_REPORT_MODE_FULL);
-
-        break;
-
-    // SimpleHID. Data pushes only on button press/release
-    case 0x3F:
-        ESP_LOGI(TAG, "Setting short report mode.");
-        //ns_controller_input_task_set(NS_REPORT_MODE_SIMPLE);
-        break;
-
-    // NFC/IR
-    case 0x31:
-    case 0x00 ... 0x03:
-    default:
-        // ERROR
-        break;
-    }
-}
-
-void ns_controller_input_task_set(ns_report_mode_t report_mode_type)
-{
-    const char *TAG = "ns_controller_input_task_set";
-
-    switch (report_mode_type)
-    {
-    default:
-        ESP_LOGI(TAG, "Unhandled input task: %d", report_mode_type);
-    break;
-
-    case NS_REPORT_MODE_BLANK:
-        ESP_LOGI(TAG, "Set Report Mode BLANK");
-
-        if(_switch_bt_task_handle==NULL)
-        {
-            xTaskCreatePinnedToCore(_switch_bt_task_standard,
-                                "Standard Send Task", 2048,
-                                NULL, 0, &_switch_bt_task_handle, 0);
-        }
-        
-        break;
-
-    /*case NS_REPORT_MODE_SIMPLE:
-        ESP_LOGI(TAG, "Start input SIMPLE task...");
-
-        // Set the internal reporting mode.
-        _switch_report_mode = NS_REPORT_MODE_SIMPLE;
-        xTaskCreatePinnedToCore(_switch_bt_task_short,
-                                "Standard Send Task", 2048,
-                                NULL, 0, &_switch_bt_task_handle, 0);
-        break;*/
-
-    case NS_REPORT_MODE_FULL:
-        ESP_LOGI(TAG, "Set Report Mode FULL");
-        break;
-    }
-}
-
-uint32_t interval_to_ticks(uint16_t interval)
-{
-    float num = 0.625f*(float)interval;
-    uint32_t out = (uint32_t) num / portTICK_PERIOD_MS;
-    return out;
-}
-
-uint32_t interval_to_us(uint16_t interval)
-{
-    return (uint32_t) interval * 625;
-}
-
 // Unused
 void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
 {
@@ -184,56 +347,20 @@ void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
     return;
     if(sniff)
     {
-        _sniff = true;
-        _delay_time_us = rx_lat*1000;//interval_to_us(rx_lat);
+        //_sniff = true;
+        //_delay_time_us = rx_lat*1000;//_ns_interval_to_us(rx_lat);
         printf("Delay (ms): %d\n", rx_lat);
     }
     else
     {
-        _sniff = false;
-        _delay_time_us = 8000;
+        //_sniff = false;
+        //_delay_time_us = 8000;
         printf("UnSniff: \n");
     }
-    ns_reset_report_spacer();
+    _ns_reset_report_spacer();
 }
 
-/* HCI mode defenitions */
-#define HCI_MODE_ACTIVE                 0x00
-#define HCI_MODE_HOLD                   0x01
-#define HCI_MODE_SNIFF                  0x02
-#define HCI_MODE_PARK                   0x03
 
-
-void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
-{
-    if (!succeeded) {
-        printf("HCI mode change event failed\n");
-        return;
-    }
-
-    switch (mode) {
-        case HCI_MODE_ACTIVE:
-            printf("Connection handle 0x%04x is in ACTIVE mode.\n", hci_handle);
-            // Handle ACTIVE mode
-            _sniff = false;
-            _delay_time_us = 8000;
-            break;
-
-        case HCI_MODE_SNIFF:
-            printf("Connection handle 0x%04x is in SNIFF mode. Interval: %d ms\n", hci_handle, interval);
-            // Handle SNIFF mode
-            
-            _sniff = true;
-            _delay_time_us = interval*1000;//interval_to_us(interval);
-            break;
-
-        default:
-            printf("Connection handle 0x%04x is in an unknown mode (%d). Interval: %d slots\n", hci_handle, mode, interval);
-            break;
-    }
-    //vTaskDelay(16/portTICK_PERIOD_MS);
-    ns_reset_report_spacer();
-}
 
 /* HCI mode defenitions */
 #define HCI_MODE_ACTIVE                 0x00
@@ -409,7 +536,7 @@ void switch_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, vo
             if (param->disconnect.status == ESP_OK)
             {
                 _hid_connected = false;
-                ns_reset_report_spacer();
+                _ns_reset_report_spacer();
                 ESP_LOGI(TAG, "DISCONNECT OK");
             }
             else
@@ -491,25 +618,7 @@ int core_bt_switch_start(void)
 void core_bt_switch_stop(void)
 {
     const char *TAG = "core_ns_stop";
-    // ns_connected = false;
-    // ns_controller_input_task_set(NS_REPORT_MODE_IDLE);
     util_bluetooth_deinit();
-}
-
-// Save Nintendo Switch bluetooth pairing
-void ns_savepairing(uint8_t *host_addr)
-{
-    const char *TAG = "ns_savepairing";
-
-    if (host_addr == NULL)
-    {
-        ESP_LOGE(TAG, "Host address is blank.");
-        return;
-    }
-
-    ESP_LOGI(TAG, "Pairing to Nintendo Switch.");
-
-    app_save_host_mac(INPUT_MODE_SWPRO, host_addr);
 }
 
 void _switch_bt_task_standard(void *parameters)
@@ -520,8 +629,7 @@ void _switch_bt_task_standard(void *parameters)
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
-    _delay_time_us = DEFAULT_US_DELAY; 
-    _sniff = true;
+    app_set_report_timer(DEFAULT_US_DELAY); 
 
     for (;;)
     {
@@ -530,12 +638,12 @@ void _switch_bt_task_standard(void *parameters)
 
         if(_hid_connected)
         {
-            if(ns_send_check_nonblocking())
+            if(_ns_send_check_nonblocking())
             {
                 if((_report_mode == NS_REPORT_MODE_FULL))
                 {
                     ns_report_clear(_full_buffer, 64);
-                    ns_report_setinputreport_full(_full_buffer, &_switch_input_data);
+                    ns_report_setinputreport_full(_full_buffer);
                     ns_report_settimer(_full_buffer);
                     ns_report_setbattconn(_full_buffer);
                     //_full_buffer[12] = 0x70;
@@ -555,8 +663,6 @@ void _switch_bt_task_standard(void *parameters)
     }
 }
 
-#define ANALOG_DIGITAL_THRESH 650
-
 void switch_bt_sendinput(i2cinput_input_s *input)
 {
     _switch_input_data.ls_x = input->lx;
@@ -570,21 +676,21 @@ void switch_bt_sendinput(i2cinput_input_s *input)
     _switch_input_data.b_x = input->button_x;
     _switch_input_data.b_y = input->button_y;
 
-    _switch_input_data.d_down = input->dpad_down;
-    _switch_input_data.d_left = input->dpad_left;
-    _switch_input_data.d_right = input->dpad_right;
-    _switch_input_data.d_up = input->dpad_up;
+    _switch_input_data.d_down   = input->dpad_down;
+    _switch_input_data.d_left   = input->dpad_left;
+    _switch_input_data.d_right  = input->dpad_right;
+    _switch_input_data.d_up     = input->dpad_up;
 
     _switch_input_data.b_capture    = input->button_capture;
     _switch_input_data.b_home       = input->button_home;
     _switch_input_data.b_minus      = input->button_minus;
     _switch_input_data.b_plus       = input->button_plus;
 
-    _switch_input_data.t_l = input->trigger_l;
-    _switch_input_data.t_r = input->trigger_r;
+    _switch_input_data.t_l  = input->trigger_l;
+    _switch_input_data.t_r  = input->trigger_r;
     _switch_input_data.t_zl = input->trigger_zl;
     _switch_input_data.t_zr = input->trigger_zr;
 
-    _switch_input_data.sb_left = input->button_stick_left;
+    _switch_input_data.sb_left  = input->button_stick_left;
     _switch_input_data.sb_right = input->button_stick_right;
 }

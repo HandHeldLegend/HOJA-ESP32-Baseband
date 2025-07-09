@@ -22,6 +22,8 @@
 #define I2C_TX_COUNTER_IDX 1
 #define I2C_TX_STATUS_IDX 2
 
+#define I2C_START_CMD_CRC_LEN 13
+
 // Last processed packet number from Host
 uint8_t _current_rx_packet_num = 0;
 uint8_t _current_tx_packet_num = 0;
@@ -31,14 +33,19 @@ typedef struct
     uint8_t data[I2C_RX_BUFFER_SIZE];
 } packed_i2c_msg;
 
-// Utilities
-uint32_t get_timestamp_us()
-{
-    int64_t t = esp_timer_get_time();
+uint64_t _time_global = 0;
 
-    if (t > 0xFFFFFFFF)
-        t -= 0xFFFFFFFF;
-    return (uint32_t)t;
+// Utilities
+uint64_t get_timestamp_us()
+{
+    _time_global = esp_timer_get_time();
+
+    return _time_global;
+}
+
+uint64_t get_timestamp_ms()
+{
+    return get_timestamp_us()/1000;
 }
 
 uint8_t _i2c_buffer_in[I2C_RX_BUFFER_SIZE];
@@ -192,6 +199,61 @@ void ringbuffer_unload_threadsafe()
     }
 }
 
+static volatile uint64_t _app_report_timer_us = 4000; // Default 4ms
+static volatile uint64_t _app_report_timer_us_default = 8000;
+static volatile bool _sniff = true;
+
+void app_set_report_timer(uint64_t timer_us)
+{
+    _app_report_timer_us_default = timer_us;
+
+    if(!_sniff)
+    {
+        _app_report_timer_us = _app_report_timer_us_default;
+    }
+}
+
+uint64_t app_get_report_timer()
+{
+    return _app_report_timer_us;
+}
+
+/* HCI mode defenitions */
+#define HCI_MODE_ACTIVE                 0x00
+#define HCI_MODE_HOLD                   0x01
+#define HCI_MODE_SNIFF                  0x02
+#define HCI_MODE_PARK                   0x03
+
+// This is used
+void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
+{
+    if (!succeeded) {
+        printf("HCI mode change event failed\n");
+        return;
+    }
+
+    switch (mode) {
+        case HCI_MODE_ACTIVE:
+            printf("Connection handle 0x%04x is in ACTIVE mode.\n", hci_handle);
+            // Handle ACTIVE mode
+            _sniff = false;
+            _app_report_timer_us = _app_report_timer_us_default;
+            break;
+
+        case HCI_MODE_SNIFF:
+            printf("Connection handle 0x%04x is in SNIFF mode. Interval: %d ms\n", hci_handle, interval);
+            // Handle SNIFF mode
+            
+            _sniff = true;
+            _app_report_timer_us = interval*1000;//_ns_interval_to_us(interval);
+            break;
+
+        default:
+            printf("Connection handle 0x%04x is in an unknown mode (%d). Interval: %d slots\n", hci_handle, mode, interval);
+            break;
+    }
+}
+
 // Only call from core 1
 uint8_t app_core1_get_packet_counter()
 {
@@ -209,7 +271,7 @@ void app_set_connected_status(uint8_t status)
     };
 
     conn_status.data[0] = status;
-    conn_status.rand_seed = esp_random();
+    conn_status.rand_seed = esp_random() % 0xFFFF;
 
     memcpy(&(conn_buffer[I2C_TX_STATUS_IDX]), &conn_status, sizeof(i2cinput_status_s));
 
@@ -245,7 +307,7 @@ void app_set_power_setting(i2c_power_code_t power)
     };
 
     power_status.data[0] = power;
-    power_status.rand_seed = esp_random();
+    power_status.rand_seed = esp_random() % 0xFFFF;
 
     memcpy(&(power_buffer[I2C_TX_STATUS_IDX]), &power_status, sizeof(i2cinput_status_s));
 
@@ -268,7 +330,7 @@ void app_set_switch_haptic(uint8_t *data)
     // Copy haptic data into status
     memcpy(&(haptic_status.data), data, 8);
     // Generate random seed
-    haptic_status.rand_seed = esp_random();
+    haptic_status.rand_seed = esp_random() % 0xFFFF;
 
     // Copy haptic_status into haptic_buffer
     memcpy(&(haptic_buffer[I2C_TX_STATUS_IDX]), &haptic_status, sizeof(i2cinput_status_s));
@@ -293,14 +355,41 @@ void app_set_standard_haptic(uint8_t left, uint8_t right)
     // Copy haptic data into status
     haptic_status.data[0] = left;
     haptic_status.data[1] = right;
+
     // Generate random seed
-    haptic_status.rand_seed = esp_random();
+    haptic_status.rand_seed = esp_random() % 0xFFFF;
 
     // Copy haptic_status into haptic_buffer
     memcpy(&(haptic_buffer[I2C_TX_STATUS_IDX]), &haptic_status, sizeof(i2cinput_status_s));
 
     // Set the CRC at byte 0 of our outgoing data
     uint8_t crc = crc8_compute((uint8_t *)&haptic_status, sizeof(i2cinput_status_s));
+    haptic_buffer[I2C_TX_CRC_IDX] = crc;
+    haptic_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
+
+    ringbuffer_load_threadsafe(haptic_buffer);
+}
+
+// Only call from core 1
+void app_set_sinput_haptic(uint8_t *data, uint8_t len)
+{
+    uint8_t haptic_buffer[I2C_TX_BUFFER_SIZE] = {0};
+    i2cinput_status_s haptic_status = {
+        .cmd = I2C_STATUS_HAPTIC_SINPUT,
+    };
+
+    // Copy haptic data into status
+    memcpy(haptic_status.data, data, len);
+
+    // Generate random seed
+    haptic_status.rand_seed = esp_random() % 0xFFFF;
+
+    // Copy haptic_status into haptic_buffer
+    memcpy(&(haptic_buffer[I2C_TX_STATUS_IDX]), &haptic_status, sizeof(i2cinput_status_s));
+
+    // Set the CRC at byte 0 of our outgoing data
+    uint8_t crc = crc8_compute((uint8_t *)&haptic_status, sizeof(i2cinput_status_s));
+
     haptic_buffer[I2C_TX_CRC_IDX] = crc;
     haptic_buffer[I2C_TX_COUNTER_IDX] = app_core1_get_packet_counter();
 
@@ -328,11 +417,8 @@ void settings_default()
     memset(&global_loaded_settings.paired_host_switch_mac, 0, 6);
     generate_random_mac(global_loaded_settings.device_mac_switch);
 
-    memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
-    generate_random_mac(global_loaded_settings.device_mac_gamecube);
-
-    memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
-    generate_random_mac(global_loaded_settings.device_mac_xinput);
+    memset(&global_loaded_settings.paired_host_sinput_mac, 0, 6);
+    generate_random_mac(global_loaded_settings.device_mac_sinput);
 }
 
 void app_settings_save()
@@ -370,12 +456,8 @@ void app_save_host_mac(input_mode_t mode, uint8_t *address)
             write_address = global_loaded_settings.paired_host_switch_mac;
         break;
 
-        case INPUT_MODE_GAMECUBE:   
-            write_address = global_loaded_settings.paired_host_gamecube_mac;
-        break;
-
-        case INPUT_MODE_XINPUT:
-            write_address = global_loaded_settings.paired_host_xinput_mac;
+        case INPUT_MODE_SINPUT:
+            write_address = global_loaded_settings.paired_host_sinput_mac;
         break;
     }
 
@@ -577,7 +659,7 @@ void bt_device_start(uint8_t *data)
     
     uint8_t crc = data[1];
 
-    bool crc_pass = crc8_verify(&(data[2]), 13, crc);
+    bool crc_pass = crc8_verify(&(data[2]), I2C_START_CMD_CRC_LEN, crc);
     if(!crc_pass)
     {
         printf("CRC Startup FAIL\n");
@@ -616,6 +698,10 @@ void bt_device_start(uint8_t *data)
     global_live_data.rgb_buttons[1] = data[15];
     global_live_data.rgb_buttons[2] = data[16];
 
+    // Load PID/VID
+    global_live_data.vendor_id  = (data[17] << 8) | data[18];
+    global_live_data.product_id = (data[19] << 8) | data[20];
+
     // Check if we should clear our addresses
     // to initiate a new pairing sequence
     if(data[2] & 0x80)
@@ -628,15 +714,9 @@ void bt_device_start(uint8_t *data)
                 generate_random_mac(global_loaded_settings.device_mac_switch);
             break;
 
-            case INPUT_MODE_GCUSB:
-            case INPUT_MODE_GAMECUBE:
-                memset(&global_loaded_settings.paired_host_gamecube_mac, 0, 6);
-                generate_random_mac(global_loaded_settings.device_mac_gamecube);
-            break;
-
-            case INPUT_MODE_XINPUT:
-                memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
-                generate_random_mac(global_loaded_settings.device_mac_xinput);
+            case INPUT_MODE_SINPUT:
+                memset(&global_loaded_settings.paired_host_sinput_mac, 0, 6);
+                generate_random_mac(global_loaded_settings.device_mac_sinput);
             break;
         }
 
@@ -655,18 +735,10 @@ void bt_device_start(uint8_t *data)
         core_bt_switch_start();
         break;
 
-    case INPUT_MODE_GCUSB:
-    case INPUT_MODE_GAMECUBE:
-        _bluetooth_input_cb = gamecube_bt_sendinput;
-        ESP_LOGI(TAG, "GameCube BT Mode Init...");
-
-        core_bt_gamecube_start();
-        break;
-
-    case INPUT_MODE_XINPUT:
-        _bluetooth_input_cb = xinput_bt_sendinput;
-        ESP_LOGI(TAG, "XInput BT Mode Init...");
-        core_bt_xinput_start();
+    case INPUT_MODE_SINPUT:
+        _bluetooth_input_cb = sinput_bt_sendinput;
+        ESP_LOGI(TAG, "SInput BT Mode Init...");
+        core_bt_sinput_start();
         break;
     }
 }
@@ -685,34 +757,6 @@ void bt_device_return_fw_version()
 
     // Instant transmit
     mi2c_slave_polling_write(tmp_out, I2C_TX_BUFFER_SIZE, pdMS_TO_TICKS(1000));
-}
-
-volatile uint32_t _timer = 0;
-volatile bool _timer_owned = false;
-uint32_t get_timer_value()
-{
-    static uint32_t safe_value = 0;
-    if (_timer_owned)
-        return safe_value;
-    else
-    {
-        _timer_owned = true;
-        safe_value = _timer;
-        _timer_owned = false;
-    }
-    return safe_value;
-}
-
-void update_timer_value()
-{
-    if (_timer_owned)
-        return;
-    else
-    {
-        _timer_owned = true;
-        _timer = get_timestamp_us();
-        _timer_owned = false;
-    }
 }
 
 void app_main(void)

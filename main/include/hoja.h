@@ -11,6 +11,9 @@ uint64_t get_timestamp_us();
 imu_data_s* imu_fifo_last();
 void imu_fifo_push(imu_data_s *imu_data);
 
+void app_set_report_timer(uint64_t timer_us);
+uint64_t app_get_report_timer();
+
 void app_set_power_setting(i2c_power_code_t power);
 void app_set_connected_status(uint8_t status);
 

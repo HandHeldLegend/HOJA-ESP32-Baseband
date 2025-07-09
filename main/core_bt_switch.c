@@ -184,9 +184,7 @@ const uint8_t procon_hid_descriptor[PROCON_HID_REPORT_MAP_LEN] = {
 #define DEFAULT_TICK_DELAY (8/portTICK_PERIOD_MS)
 #define DEFAULT_US_DELAY (8*1000)
 static volatile bool        _hid_connected = false;
-static volatile uint32_t    _delay_time_us = DEFAULT_US_DELAY;
-static volatile uint32_t    _delay_time_ticks = DEFAULT_TICK_DELAY; // 8ms default?
-static volatile bool        _sniff = true;
+
 static volatile bool        _switch_paired = false;
 uint8_t _switch_imu_mode = 0x00;
 
@@ -284,13 +282,15 @@ void ns_report_setinputreport_full(uint8_t *buffer)
 void _ns_reset_report_spacer()
 {
     uint64_t timestamp = get_timestamp_us();
-    interval_resettable_run(timestamp, _delay_time_us, true, &_ns_interval);
+    uint64_t delay_time = app_get_report_timer();
+    interval_resettable_run(timestamp, delay_time, true, &_ns_interval);
 }
 
 bool _ns_send_check_nonblocking()
 {
     uint64_t timestamp = get_timestamp_us();
-    return interval_run(timestamp, _delay_time_us, &_ns_interval);
+    uint64_t delay_time = app_get_report_timer();
+    return interval_run(timestamp, delay_time, &_ns_interval);
 }
 
 /**
@@ -347,56 +347,20 @@ void btsnd_hcic_sniff_mode_cb(bool sniff, uint16_t tx_lat, uint16_t rx_lat)
     return;
     if(sniff)
     {
-        _sniff = true;
-        _delay_time_us = rx_lat*1000;//_ns_interval_to_us(rx_lat);
+        //_sniff = true;
+        //_delay_time_us = rx_lat*1000;//_ns_interval_to_us(rx_lat);
         printf("Delay (ms): %d\n", rx_lat);
     }
     else
     {
-        _sniff = false;
-        _delay_time_us = 8000;
+        //_sniff = false;
+        //_delay_time_us = 8000;
         printf("UnSniff: \n");
     }
     _ns_reset_report_spacer();
 }
 
-/* HCI mode defenitions */
-#define HCI_MODE_ACTIVE                 0x00
-#define HCI_MODE_HOLD                   0x01
-#define HCI_MODE_SNIFF                  0x02
-#define HCI_MODE_PARK                   0x03
 
-// This is used
-void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
-{
-    if (!succeeded) {
-        printf("HCI mode change event failed\n");
-        return;
-    }
-
-    switch (mode) {
-        case HCI_MODE_ACTIVE:
-            printf("Connection handle 0x%04x is in ACTIVE mode.\n", hci_handle);
-            // Handle ACTIVE mode
-            _sniff = false;
-            _delay_time_us = 8000;
-            break;
-
-        case HCI_MODE_SNIFF:
-            printf("Connection handle 0x%04x is in SNIFF mode. Interval: %d ms\n", hci_handle, interval);
-            // Handle SNIFF mode
-            
-            _sniff = true;
-            _delay_time_us = interval*1000;//_ns_interval_to_us(interval);
-            break;
-
-        default:
-            printf("Connection handle 0x%04x is in an unknown mode (%d). Interval: %d slots\n", hci_handle, mode, interval);
-            break;
-    }
-
-    _ns_reset_report_spacer();
-}
 
 /* HCI mode defenitions */
 #define HCI_MODE_ACTIVE                 0x00
@@ -665,8 +629,7 @@ void _switch_bt_task_standard(void *parameters)
 
     //_report_mode = NS_REPORT_MODE_BLANK;
     _hid_connected = false;
-    _delay_time_us = DEFAULT_US_DELAY; 
-    _sniff = true;
+    app_set_report_timer(DEFAULT_US_DELAY); 
 
     for (;;)
     {

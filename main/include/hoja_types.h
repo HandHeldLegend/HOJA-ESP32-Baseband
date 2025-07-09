@@ -6,8 +6,8 @@
 
 typedef struct 
 {
-  uint32_t this_time;
-  uint32_t last_time;
+  uint64_t this_time;
+  uint64_t last_time;
 } interval_s;
 
 // IMU data structure

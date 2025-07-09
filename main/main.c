@@ -199,6 +199,61 @@ void ringbuffer_unload_threadsafe()
     }
 }
 
+static volatile uint64_t _app_report_timer_us = 4000; // Default 4ms
+static volatile uint64_t _app_report_timer_us_default = 8000;
+static volatile bool _sniff = true;
+
+void app_set_report_timer(uint64_t timer_us)
+{
+    _app_report_timer_us_default = timer_us;
+
+    if(!_sniff)
+    {
+        _app_report_timer_us = _app_report_timer_us_default;
+    }
+}
+
+uint64_t app_get_report_timer()
+{
+    return _app_report_timer_us;
+}
+
+/* HCI mode defenitions */
+#define HCI_MODE_ACTIVE                 0x00
+#define HCI_MODE_HOLD                   0x01
+#define HCI_MODE_SNIFF                  0x02
+#define HCI_MODE_PARK                   0x03
+
+// This is used
+void btm_hcif_mode_change_cb(bool succeeded, uint16_t hci_handle, uint8_t mode, uint16_t interval)
+{
+    if (!succeeded) {
+        printf("HCI mode change event failed\n");
+        return;
+    }
+
+    switch (mode) {
+        case HCI_MODE_ACTIVE:
+            printf("Connection handle 0x%04x is in ACTIVE mode.\n", hci_handle);
+            // Handle ACTIVE mode
+            _sniff = false;
+            _app_report_timer_us = _app_report_timer_us_default;
+            break;
+
+        case HCI_MODE_SNIFF:
+            printf("Connection handle 0x%04x is in SNIFF mode. Interval: %d ms\n", hci_handle, interval);
+            // Handle SNIFF mode
+            
+            _sniff = true;
+            _app_report_timer_us = interval*1000;//_ns_interval_to_us(interval);
+            break;
+
+        default:
+            printf("Connection handle 0x%04x is in an unknown mode (%d). Interval: %d slots\n", hci_handle, mode, interval);
+            break;
+    }
+}
+
 // Only call from core 1
 uint8_t app_core1_get_packet_counter()
 {

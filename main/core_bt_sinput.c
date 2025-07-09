@@ -249,8 +249,6 @@ const uint8_t sinput_hid_report_descriptor[139] = {
 #define SINPUT_DEFAULT_TICK_DELAY (4/portTICK_PERIOD_MS)
 #define SINPUT_DEFAULT_US_DELAY (4*1000)
 static volatile bool        _hid_connected    = false;
-static volatile uint32_t    _delay_time_us    = SINPUT_DEFAULT_US_DELAY;
-static volatile uint32_t    _delay_time_ticks = SINPUT_DEFAULT_TICK_DELAY; // 8ms default?
 
 static volatile bool        _sinput_paired = false;
 
@@ -259,14 +257,16 @@ sinput_input_s _si_input = {0};
 
 void _si_reset_report_spacer()
 {
+    uint64_t delay_time = app_get_report_timer();
     uint64_t timestamp = get_timestamp_us();
-    interval_resettable_run(timestamp, _delay_time_us, true, &_si_interval);
+    interval_resettable_run(timestamp, delay_time, true, &_si_interval);
 }
 
 bool _si_send_check_nonblocking()
 {
+    uint64_t delay_time = app_get_report_timer();
     uint64_t timestamp = get_timestamp_us();
-    return interval_run(timestamp, _delay_time_us, &_si_interval);
+    return interval_run(timestamp, delay_time, &_si_interval);
 }
 
 TaskHandle_t _sinput_bt_task_handle = NULL;
@@ -599,7 +599,7 @@ void _sinput_bt_task(void *parameters)
     ESP_LOGI("_sinput_bt_task", "Starting input loop task...");
 
     _hid_connected = false;
-    _delay_time_us = SINPUT_DEFAULT_US_DELAY; 
+    app_set_report_timer(SINPUT_DEFAULT_US_DELAY); 
 
     for (;;)
     {

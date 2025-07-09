@@ -21,13 +21,13 @@ typedef struct
     {
         struct
         {
-            uint8_t button_b : 1;
-            uint8_t button_a : 1;
-            uint8_t button_y : 1;
-            uint8_t button_x : 1;
-            uint8_t dpad_up : 1;
-            uint8_t dpad_down : 1;
-            uint8_t dpad_left : 1;
+            uint8_t button_south : 1;
+            uint8_t button_east  : 1;
+            uint8_t button_west  : 1;
+            uint8_t button_north : 1;
+            uint8_t dpad_up    : 1;
+            uint8_t dpad_down  : 1;
+            uint8_t dpad_left  : 1;
             uint8_t dpad_right : 1;
         };
         uint8_t buttons_1;
@@ -39,12 +39,12 @@ typedef struct
         {
             uint8_t button_stick_left : 1;
             uint8_t button_stick_right : 1;
-            uint8_t button_l : 1;
-            uint8_t button_r : 1;
-            uint8_t button_zl : 1;
-            uint8_t button_zr : 1;
-            uint8_t button_gl : 1;
-            uint8_t button_gr : 1;
+            uint8_t button_l_shoulder : 1;
+            uint8_t button_r_shoulder : 1;
+            uint8_t button_l_trigger : 1;
+            uint8_t button_r_trigger : 1;
+            uint8_t button_l_paddle_1 : 1;
+            uint8_t button_r_paddle_1 : 1;
         };
         uint8_t buttons_2;
     };
@@ -53,12 +53,14 @@ typedef struct
     {
         struct
         {
-            uint8_t button_plus : 1;
-            uint8_t button_minus : 1;
-            uint8_t button_home : 1;
-            uint8_t button_capture : 1;
-            uint8_t button_power : 1;
-            uint8_t reserved_b3 : 3; // Reserved bits
+            uint8_t button_start  : 1;
+            uint8_t button_select : 1;
+            uint8_t button_guide  : 1;
+            uint8_t button_share  : 1;
+            uint8_t button_power  : 1;
+            uint8_t button_l_paddle_2 : 1;
+            uint8_t button_r_paddle_2 : 1;
+            uint8_t reserved_b3 : 1; // Reserved bits
         };
         uint8_t buttons_3;
     };
@@ -78,8 +80,7 @@ typedef struct
     int16_t gyro_y;             // Gyroscope Y
     int16_t gyro_z;             // Gyroscope Z
 
-    uint8_t command_id; // Response Command Byte Indication (0 if no response data)
-    uint8_t reserved_bulk[30];  // Reserved for command data
+    uint8_t reserved_bulk[31];  // Reserved for command data
 } sinput_input_s;
 #pragma pack(pop)
 
@@ -674,32 +675,32 @@ void sinput_bt_sendinput(i2cinput_input_s *input)
     _si_input.right_y   = ((int16_t) input->ry - 2047) * -16;
 
     // Buttons
-    _si_input.button_a = input->button_a;
-    _si_input.button_b = input->button_b;
-    _si_input.button_x = input->button_x;
-    _si_input.button_y = input->button_y;
+    _si_input.button_east  = input->button_a;
+    _si_input.button_south = input->button_b;
+    _si_input.button_north = input->button_x;
+    _si_input.button_west  = input->button_y;
 
-    _si_input.button_stick_left = input->button_stick_left;
+    _si_input.button_stick_left  = input->button_stick_left;
     _si_input.button_stick_right = input->button_stick_right;
 
-    _si_input.button_plus = input->button_plus;
-    _si_input.button_minus = input->button_minus;
-    _si_input.button_home = input->button_home;
-    _si_input.button_capture = input->button_capture;
+    _si_input.button_start  = input->button_plus;
+    _si_input.button_select = input->button_minus;
+    _si_input.button_guide  = input->button_home;
+    _si_input.button_share  = input->button_capture;
 
     _si_input.dpad_up = input->dpad_up;
     _si_input.dpad_down = input->dpad_down;
     _si_input.dpad_left = input->dpad_left;
     _si_input.dpad_right = input->dpad_right;
 
-    _si_input.button_l = input->trigger_l;
-    _si_input.button_r = input->trigger_r;
+    _si_input.button_l_shoulder = input->trigger_l;
+    _si_input.button_r_shoulder = input->trigger_r;
 
-    _si_input.button_zl = input->trigger_zl;
-    _si_input.button_zr = input->trigger_zr;
+    _si_input.button_l_paddle_1 = input->trigger_gl;
+    _si_input.button_r_paddle_1 = input->trigger_gr;
 
-    _si_input.button_gl = input->trigger_gl;
-    _si_input.button_gr = input->trigger_gr;
+    _si_input.button_l_trigger  = input->trigger_zl;
+    _si_input.button_r_trigger  = input->trigger_zr;
 
     _si_input.button_power = input->button_shipping;
 

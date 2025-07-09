@@ -56,7 +56,7 @@ void imu_pack_quat(mode_2_s *out)
   out->delta_mid_avg_2 = 0;
 
   // Timestamps handling is still a bit unclear, these are the values that motion_data in no drifting 
-  time_ms = get_timestamp_ms();
+  _imu_quat_state.timestamp = get_timestamp_ms();
   out->timestamp_start_l = _imu_quat_state.timestamp & 0x1;
   out->timestamp_start_h = (_imu_quat_state.timestamp  >> 1) & 0x3FF;
   out->timestamp_count = 3;

@@ -665,6 +665,15 @@ void _sinput_bt_task(void *parameters)
     }
 }
 
+int16_t scale_u12_to_s16(uint16_t val)
+{
+    if (val > 4095) val = 4095; // Clamp just in case
+
+    // Scale: map [0, 4095] → [INT16_MIN, INT16_MAX]
+    // The range of INT16 is 65535, so multiply first to preserve precision
+    return (int16_t)(((int32_t)val * 65535) / 4095 + INT16_MIN);
+}
+
 void sinput_bt_sendinput(i2cinput_input_s *input)
 {
     
@@ -706,6 +715,6 @@ void sinput_bt_sendinput(i2cinput_input_s *input)
 
     int32_t trigger = -32768;
 
-    _si_input.trigger_l = trigger + ((input->lt)   * 16);    // Scale to 16-bit
-    _si_input.trigger_r = trigger + ((input->rt)   * 16);    // Scale to 16-bit
+    _si_input.trigger_l = scale_u12_to_s16(input->lt);    // Scale to 16-bit
+    _si_input.trigger_r = scale_u12_to_s16(input->rt);    // Scale to 16-bit
 }

@@ -17,14 +17,12 @@ typedef struct
     uint8_t plug_status;    // Plug Status Format
     uint8_t charge_percent; // 0-100
 
-    union
-    {
-        struct
-        {
-            uint8_t button_south : 1;
-            uint8_t button_east  : 1;
-            uint8_t button_west  : 1;
-            uint8_t button_north : 1;
+    union {
+        struct {
+            uint8_t button_a   : 1;
+            uint8_t button_b   : 1;
+            uint8_t button_x   : 1;
+            uint8_t button_y   : 1;
             uint8_t dpad_up    : 1;
             uint8_t dpad_down  : 1;
             uint8_t dpad_left  : 1;
@@ -57,15 +55,33 @@ typedef struct
             uint8_t button_select : 1;
             uint8_t button_guide  : 1;
             uint8_t button_share  : 1;
-            uint8_t button_power  : 1;
             uint8_t button_l_paddle_2 : 1;
             uint8_t button_r_paddle_2 : 1;
-            uint8_t reserved_b3 : 1; // Reserved bits
+            uint8_t button_l_touchpad : 1;
+            uint8_t button_r_touchpad : 1;
         };
         uint8_t buttons_3;
     };
 
-    uint8_t buttons_reserved;
+    union
+    {
+        struct
+        {
+            uint8_t button_power   : 1;
+            uint8_t button_misc_4  : 1;
+            uint8_t button_misc_5  : 1;
+            uint8_t button_misc_6  : 1;
+            
+            // Misc 7 through 10 is unused by
+            // SDL currently!
+            uint8_t button_misc_7  : 1; 
+            uint8_t button_misc_8  : 1;
+            uint8_t button_misc_9  : 1;
+            uint8_t button_misc_10 : 1;
+        };
+        uint8_t buttons_4;
+    };
+
     int16_t left_x;             // Left stick X
     int16_t left_y;             // Left stick Y
     int16_t right_x;            // Right stick X
@@ -80,7 +96,15 @@ typedef struct
     int16_t gyro_y;             // Gyroscope Y
     int16_t gyro_z;             // Gyroscope Z
 
-    uint8_t reserved_bulk[31];  // Reserved for command data
+    int16_t touchpad_1_x;       // Touchpad/trackpad
+    int16_t touchpad_1_y;
+    int16_t touchpad_1_pressure;
+
+    int16_t touchpad_2_x;
+    int16_t touchpad_2_y;
+    int16_t touchpad_2_pressure;
+
+    uint8_t reserved_bulk[19];  // Reserved for command data
 } sinput_input_s;
 #pragma pack(pop)
 
@@ -137,7 +161,7 @@ typedef union
 {
     struct
     {
-        uint8_t haptics_supported : 1;
+        uint8_t rumble_supported : 1;
         uint8_t player_leds_supported : 1;
         uint8_t accelerometer_supported : 1;
         uint8_t gyroscope_supported : 1;
@@ -147,7 +171,7 @@ typedef union
         uint8_t right_analog_trigger_supported : 1;
     };
     uint8_t value;
-} sinput_featureflags_u;
+} sinput_featureflags_1_u;
 #pragma pack(pop)
 
 #define SINPUT_HID_REPORT_MAP_LEN 139
@@ -247,14 +271,86 @@ const uint8_t sinput_hid_report_descriptor[139] = {
     0xC0                           // End Collection 
 };
 
-#define SINPUT_DEFAULT_TICK_DELAY (4/portTICK_PERIOD_MS)
-#define SINPUT_DEFAULT_US_DELAY (4*1000)
+#define SINPUT_DEFAULT_TICK_DELAY (8/portTICK_PERIOD_MS)
+#define SINPUT_DEFAULT_US_DELAY (8*1000)
 static volatile bool        _hid_connected    = false;
 
 static volatile bool        _sinput_paired = false;
 
 interval_s _si_interval = {0};
 sinput_input_s _si_input = {0};
+
+void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
+{
+    sinput_featureflags_1_u feature_flags = {0};
+    feature_flags.value = 0x00; // Set default feature flags
+
+    if(pid == 0x10C6) // Generic HOJA Gamepad
+    {
+        switch(sub_id)
+        {
+            case 0x01: // Super Gamepad+
+
+                data[2] = 7; // ProCon Type
+                data[3] = 0x01; // Gamepad Sub-Type
+
+                feature_flags.player_leds_supported = 1;
+
+                uint8_t usage_mask_sgpp[4] = {0b11111111, 0b00001100, 0b00000011, 0b00000000};
+                data[10] = usage_mask_sgpp[0];
+                data[11] = usage_mask_sgpp[1];
+                data[12] = usage_mask_sgpp[2];
+                data[13] = usage_mask_sgpp[3];
+            break;
+        }
+    }
+    else 
+    {
+        switch(pid)
+        {
+            case 0x10DD: // GC Ultimate
+                feature_flags.accelerometer_supported   = 1;
+                feature_flags.gyroscope_supported       = 1;
+                feature_flags.left_analog_stick_supported       = 1;
+                feature_flags.right_analog_stick_supported      = 1;
+                feature_flags.left_analog_trigger_supported     = 1;
+                feature_flags.right_analog_trigger_supported    = 1;
+                feature_flags.rumble_supported     = 1;
+                feature_flags.player_leds_supported = 1;
+
+                data[2] = 11; // Gamepad Type (GameCube)
+
+                uint8_t usage_mask_gcult[4] = {0b11111111, 0b00111111, 0b00001111, 0b00000001};
+                data[10] = usage_mask_gcult[0];
+                data[11] = usage_mask_gcult[1];
+                data[12] = usage_mask_gcult[2];
+                data[13] = usage_mask_gcult[3];
+            break;
+
+            case 0x10DF: // ProGCC
+                feature_flags.accelerometer_supported   = 1;
+                feature_flags.gyroscope_supported       = 1;
+                feature_flags.left_analog_stick_supported       = 1;
+                feature_flags.right_analog_stick_supported      = 1;
+                feature_flags.left_analog_trigger_supported     = 1;
+                feature_flags.right_analog_trigger_supported    = 1;
+                feature_flags.rumble_supported     = 1;
+                feature_flags.player_leds_supported = 1;
+
+                data[2] = 7; // ProCon Type
+
+                uint8_t usage_mask_progcc[4] = {0b11111111, 0b00111111, 0b00001111, 0b00000000};
+                data[10] = usage_mask_progcc[0];
+                data[11] = usage_mask_progcc[1];
+                data[12] = usage_mask_progcc[2];
+                data[13] = usage_mask_progcc[3];
+            break;
+        }
+    }
+
+    data[1] = 0x00; // Feature flags 2 (unused)
+    data[0] = feature_flags.value; // Feature flags value   
+}
 
 void _si_reset_report_spacer()
 {
@@ -377,35 +473,16 @@ void sinput_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
 // Get Feature Flags
 void _sinput_cmd_get_featureflags(uint8_t *buffer)
 {
-    sinput_featureflags_u feature_flags = {0};
-
     uint16_t accel_g_range      = 8; // 8G 
     uint16_t gyro_dps_range     = 2000; // 2000 degrees per second
 
-    feature_flags.value = 0x00; // Set default feature flags
-
-    feature_flags.accelerometer_supported   = 1;
-    feature_flags.gyroscope_supported       = 1;
-
-    feature_flags.left_analog_stick_supported       = 1;
-    feature_flags.right_analog_stick_supported      = 1;
-    feature_flags.left_analog_trigger_supported     = 1;
-    feature_flags.right_analog_trigger_supported    = 1;
-
-    feature_flags.haptics_supported     = 1;
-    feature_flags.player_leds_supported = 1;
-
-    buffer[0] = feature_flags.value; // Feature flags value      
-    buffer[1] = 0x00; // Reserved byte
-
-    buffer[2] = 0x00; // Gamepad Sub-type (leave as zero in most cases)
-    buffer[3] = 0x00; // Reserved byte
-
-    buffer[4] = 0x00; // Reserved API version
+    buffer[4] = 8; // Report Interval ms
     buffer[5] = 0x00; // Reserved
 
     memcpy(&buffer[6], &accel_g_range, sizeof(accel_g_range)); // Accelerometer G range
     memcpy(&buffer[8], &gyro_dps_range, sizeof(gyro_dps_range)); // Gyroscope DPS range
+
+    _si_fill_features(global_live_data.product_id, global_live_data.sub_id, buffer);
 }
 
 volatile uint8_t _sinput_current_cmd = 0;
@@ -433,6 +510,9 @@ void _sinput_report_handler(uint8_t report_id, uint8_t *data, uint16_t len)
             case SINPUT_COMMAND_PLAYERLED:
             ESP_LOGI("_sinput_report_handler", "Player LED Command Got: Player %d", data[1]);
             app_set_connected_status(data[1]);
+            break;
+
+            default:
             break;
         }
     }
@@ -674,20 +754,25 @@ int16_t scale_u12_to_s16(uint16_t val)
     return (int16_t)(((int32_t)val * 65535) / 4095 + INT16_MIN);
 }
 
+// Clamp macro for int16_t
+#define CLAMP_INT16(x) (((x) > INT16_MAX) ? INT16_MAX : (((x) < INT16_MIN) ? INT16_MIN : (x)))
+
+// Scales 0-4095 to int16 range, centers at 2048, and allows optional inversion
+#define SCALE_AXIS(value, invert) \
+    CLAMP_INT16(((int32_t)((invert) ? -(value - 2048) : (value - 2048)) * 16))
+
 void sinput_bt_sendinput(i2cinput_input_s *input)
 {
-    
-
-    _si_input.left_x    = ((int16_t) input->lx - 2047) * 16;
-    _si_input.left_y    = ((int16_t) input->ly - 2047) * -16;
-    _si_input.right_x   = ((int16_t) input->rx - 2047) * 16;
-    _si_input.right_y   = ((int16_t) input->ry - 2047) * -16;
+    _si_input.left_x    = SCALE_AXIS(input->lx, false);
+    _si_input.left_y    = SCALE_AXIS(input->ly, true);
+    _si_input.right_x   = SCALE_AXIS(input->rx, false);
+    _si_input.right_y   = SCALE_AXIS(input->ry, true);
 
     // Buttons
-    _si_input.button_east  = input->button_a;
-    _si_input.button_south = input->button_b;
-    _si_input.button_north = input->button_x;
-    _si_input.button_west  = input->button_y;
+    _si_input.button_a = input->button_a;
+    _si_input.button_b = input->button_b;
+    _si_input.button_x = input->button_x;
+    _si_input.button_y = input->button_y;
 
     _si_input.button_stick_left  = input->button_stick_left;
     _si_input.button_stick_right = input->button_stick_right;

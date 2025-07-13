@@ -119,6 +119,7 @@ typedef struct
     bat_status_u bat_status;
     uint16_t vendor_id;
     uint16_t product_id;
+    uint8_t sub_id; 
 } hoja_live_s;
 
 extern hoja_settings_s global_loaded_settings;

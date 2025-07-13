@@ -199,7 +199,7 @@ void ringbuffer_unload_threadsafe()
     }
 }
 
-static volatile uint64_t _app_report_timer_us = 4000; // Default 4ms
+static volatile uint64_t _app_report_timer_us = 8000; // Default 8ms
 static volatile uint64_t _app_report_timer_us_default = 8000;
 static volatile bool _sniff = true;
 
@@ -701,6 +701,9 @@ void bt_device_start(uint8_t *data)
     // Load PID/VID
     global_live_data.vendor_id  = (data[17] << 8) | data[18];
     global_live_data.product_id = (data[19] << 8) | data[20];
+
+    // Sub-ID
+    global_live_data.sub_id = data[21];
 
     // Check if we should clear our addresses
     // to initiate a new pairing sequence

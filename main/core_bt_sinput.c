@@ -291,8 +291,8 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
         {
             case 0x01: // Super Gamepad+
 
-                data[2] = 7; // ProCon Type
-                data[3] = 0x01; // Gamepad Sub-Type
+                data[2] = 0; // Default type
+                data[3] = 0x01 | (3 << 4); // Gamepad Sub-Type and face style
 
                 feature_flags.player_leds_supported = 1;
 
@@ -552,6 +552,7 @@ void _sinput_bt_hidd_cb(void *handler_args, esp_event_base_t base, int32_t id, v
             if (param->connect.status == ESP_OK)
             {
                 _hid_connected = true;
+                app_set_connected_status(1);
                 ESP_LOGI(TAG, "CONNECT OK");
             }
             else

@@ -88,15 +88,14 @@ typedef struct
     int16_t right_y;            // Right stick Y
     int16_t trigger_l;          // Left trigger
     int16_t trigger_r;          // Right trigger
-    uint16_t gyro_elapsed_time; // Microseconds, 0 if unchanged
+    uint32_t imu_timestamp_us;  // Microseconds
+
     int16_t accel_x;            // Accelerometer X
     int16_t accel_y;            // Accelerometer Y
     int16_t accel_z;            // Accelerometer Z
     int16_t gyro_x;             // Gyroscope X
     int16_t gyro_y;             // Gyroscope Y
     int16_t gyro_z;             // Gyroscope Z
-
-    uint8_t gyro_packet_counter;
 
     int16_t touchpad_1_x;       // Touchpad/trackpad
     int16_t touchpad_1_y;
@@ -106,7 +105,7 @@ typedef struct
     int16_t touchpad_2_y;
     int16_t touchpad_2_pressure;
 
-    uint8_t reserved_bulk[18];  // Reserved for command data
+    uint8_t reserved_bulk[17];  // Reserved for command data
 } sinput_input_s;
 #pragma pack(pop)
 
@@ -284,6 +283,9 @@ sinput_input_s _si_input = {0};
 
 void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
 {
+    const uint16_t sinput_protocol_version = 0x0001;
+    memcpy(&data[0], &sinput_protocol_version, sizeof(sinput_protocol_version)); 
+
     sinput_featureflags_1_u feature_flags = {0};
     feature_flags.value = 0x00; // Set default feature flags
 
@@ -293,16 +295,16 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
         {
             case 0x01: // Super Gamepad+
 
-                data[2] = 0; // Default type
-                data[3] = 0x01 | (3 << 4); // Gamepad Sub-Type and face style
+                data[4] = 0; // Default type
+                data[5] = 0x01 | (3 << 4); // Gamepad Sub-Type and face style
 
                 feature_flags.player_leds_supported = 1;
 
                 uint8_t usage_mask_sgpp[4] = {0b11111111, 0b00001100, 0b00000011, 0b00000000};
-                data[10] = usage_mask_sgpp[0];
-                data[11] = usage_mask_sgpp[1];
-                data[12] = usage_mask_sgpp[2];
-                data[13] = usage_mask_sgpp[3];
+                data[12] = usage_mask_sgpp[0];
+                data[13] = usage_mask_sgpp[1];
+                data[14] = usage_mask_sgpp[2];
+                data[15] = usage_mask_sgpp[3];
             break;
         }
     }
@@ -320,13 +322,13 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
                 feature_flags.rumble_supported     = 1;
                 feature_flags.player_leds_supported = 1;
 
-                data[2] = 11; // Gamepad Type (GameCube)
+                data[4] = 11; // Gamepad Type (GameCube)
 
                 uint8_t usage_mask_gcult[4] = {0b11111111, 0b00111111, 0b00001111, 0b00000001};
-                data[10] = usage_mask_gcult[0];
-                data[11] = usage_mask_gcult[1];
-                data[12] = usage_mask_gcult[2];
-                data[13] = usage_mask_gcult[3];
+                data[12] = usage_mask_gcult[0];
+                data[13] = usage_mask_gcult[1];
+                data[14] = usage_mask_gcult[2];
+                data[15] = usage_mask_gcult[3];
             break;
 
             case 0x10DF: // ProGCC
@@ -339,19 +341,19 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
                 feature_flags.rumble_supported     = 1;
                 feature_flags.player_leds_supported = 1;
 
-                data[2] = 7; // ProCon Type
+                data[4] = 7; // ProCon Type
 
                 uint8_t usage_mask_progcc[4] = {0b11111111, 0b00111111, 0b00001111, 0b00000000};
-                data[10] = usage_mask_progcc[0];
-                data[11] = usage_mask_progcc[1];
-                data[12] = usage_mask_progcc[2];
-                data[13] = usage_mask_progcc[3];
+                data[12] = usage_mask_progcc[0];
+                data[13] = usage_mask_progcc[1];
+                data[14] = usage_mask_progcc[2];
+                data[15] = usage_mask_progcc[3];
             break;
         }
     }
 
-    data[1] = 0x00; // Feature flags 2 (unused)
-    data[0] = feature_flags.value; // Feature flags value   
+    data[2] = feature_flags.value; // Feature flags value   
+    data[3] = 0x00; // Feature flags 2 (unused)
 }
 
 void _si_reset_report_spacer()
@@ -478,11 +480,11 @@ void _sinput_cmd_get_featureflags(uint8_t *buffer)
     uint16_t accel_g_range      = 8; // 8G 
     uint16_t gyro_dps_range     = 2000; // 2000 degrees per second
 
-    buffer[4] = 8; // Report Interval ms
-    buffer[5] = 0x00; // Reserved
+    buffer[6] = 8;    // Polling rate (ms)
+    buffer[7] = 0x00; // Reserved
 
-    memcpy(&buffer[6], &accel_g_range, sizeof(accel_g_range)); // Accelerometer G range
-    memcpy(&buffer[8], &gyro_dps_range, sizeof(gyro_dps_range)); // Gyroscope DPS range
+    memcpy(&buffer[8], &accel_g_range, sizeof(accel_g_range)); // Accelerometer G range
+    memcpy(&buffer[10], &gyro_dps_range, sizeof(gyro_dps_range)); // Gyroscope DPS range
 
     _si_fill_features(global_live_data.product_id, global_live_data.sub_id, buffer);
 }
@@ -716,16 +718,9 @@ void _sinput_bt_task(void *parameters)
                     {
                         // Fill out delta time and gyro
                         uint64_t timestamp = get_timestamp_us();
-                        static uint64_t last_timestamp = 0;
-                        uint64_t delta_timestamp = timestamp - last_timestamp;
-                        last_timestamp = timestamp;
 
-                        _si_input.gyro_elapsed_time = delta_timestamp & 0xFFFF; // Store elapsed time in microseconds
+                        _si_input.imu_timestamp_us = (uint32_t) (timestamp & UINT32_MAX);
                         
-                        static uint8_t counter = 0;
-                        _si_input.gyro_packet_counter = counter;
-                        ++counter;
-
                         static imu_data_s *imu = NULL;
 
                         imu = imu_fifo_last();

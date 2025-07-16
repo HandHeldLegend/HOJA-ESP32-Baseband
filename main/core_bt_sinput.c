@@ -96,6 +96,8 @@ typedef struct
     int16_t gyro_y;             // Gyroscope Y
     int16_t gyro_z;             // Gyroscope Z
 
+    uint8_t gyro_packet_counter;
+
     int16_t touchpad_1_x;       // Touchpad/trackpad
     int16_t touchpad_1_y;
     int16_t touchpad_1_pressure;
@@ -104,7 +106,7 @@ typedef struct
     int16_t touchpad_2_y;
     int16_t touchpad_2_pressure;
 
-    uint8_t reserved_bulk[19];  // Reserved for command data
+    uint8_t reserved_bulk[18];  // Reserved for command data
 } sinput_input_s;
 #pragma pack(pop)
 
@@ -719,6 +721,10 @@ void _sinput_bt_task(void *parameters)
                         last_timestamp = timestamp;
 
                         _si_input.gyro_elapsed_time = delta_timestamp & 0xFFFF; // Store elapsed time in microseconds
+                        
+                        static uint8_t counter = 0;
+                        _si_input.gyro_packet_counter = counter;
+                        ++counter;
 
                         static imu_data_s *imu = NULL;
 

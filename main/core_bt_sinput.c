@@ -354,6 +354,17 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
 
     data[2] = feature_flags.value; // Feature flags value   
     data[3] = 0x00; // Feature flags 2 (unused)
+
+    data[16] = 0;
+    data[17] = 0;
+
+    // Set MAC
+    data[18] = global_live_data.current_mac[0];
+    data[19] = global_live_data.current_mac[1];
+    data[20] = global_live_data.current_mac[2];
+    data[21] = global_live_data.current_mac[3];
+    data[22] = global_live_data.current_mac[4];
+    data[23] = global_live_data.current_mac[5];
 }
 
 void _si_reset_report_spacer()
@@ -646,7 +657,14 @@ int core_bt_sinput_start(void)
     esp_err_t ret;
     int err;
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac_sinput);
+    uint8_t *mac = global_live_data.current_mac;
+
+    if( (mac[0] == 0) && (mac[1] == 0) )
+    {
+        mac = global_loaded_settings.device_mac_switch;
+    }
+
+    err = util_bluetooth_init(mac);
 
     _sinput_paired = false;
 
@@ -716,6 +734,26 @@ void _sinput_bt_task(void *parameters)
                     }
                     else 
                     {
+                        // Update battery status 
+                        if(global_live_data.bat_status.charging)
+                        {
+                            _si_input.plug_status = 2;
+                        }
+                        else 
+                        {
+                            _si_input.plug_status = 4;
+                        }
+
+                        if(global_live_data.bat_status.bat_lvl == 4)
+                        {
+                            if(global_live_data.bat_status.charging)
+                            {
+                                _si_input.plug_status = 3;
+                            }
+                        }
+
+                        _si_input.charge_percent = global_live_data.bat_status.bat_lvl * 25;
+
                         // Fill out delta time and gyro
                         uint64_t timestamp = get_timestamp_us();
 

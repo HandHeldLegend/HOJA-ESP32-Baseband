@@ -43,7 +43,6 @@ void ns_report_setbattconn(uint8_t *buffer)
 
   s.val = global_live_data.bat_status.val;
 
-  // Always set to USB connected
   buffer[1] = s.val;
 }
 

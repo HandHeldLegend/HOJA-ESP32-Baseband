@@ -705,6 +705,13 @@ void bt_device_start(uint8_t *data)
     // Sub-ID
     global_live_data.sub_id = data[21];
 
+    global_live_data.current_mac[0] = data[22];
+    global_live_data.current_mac[1] = data[23];
+    global_live_data.current_mac[2] = data[24];
+    global_live_data.current_mac[3] = data[25];
+    global_live_data.current_mac[4] = data[26];
+    global_live_data.current_mac[5] = data[27];
+
     // Check if we should clear our addresses
     // to initiate a new pairing sequence
     if(data[2] & 0x80)

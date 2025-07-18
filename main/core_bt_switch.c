@@ -593,7 +593,14 @@ int core_bt_switch_start(void)
     // Convert calibration data
     switch_analog_calibration_init();
 
-    err = util_bluetooth_init(global_loaded_settings.device_mac_switch);
+    uint8_t *mac = global_live_data.current_mac;
+
+    if( (mac[0] == 0) && (mac[1] == 0) )
+    {
+        mac = global_loaded_settings.device_mac_switch;
+    }
+
+    err = util_bluetooth_init(mac);
 
     _switch_paired = false;
 

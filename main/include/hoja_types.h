@@ -120,6 +120,7 @@ typedef struct
     uint16_t vendor_id;
     uint16_t product_id;
     uint8_t sub_id; 
+    uint8_t current_mac[6];
 } hoja_live_s;
 
 extern hoja_settings_s global_loaded_settings;

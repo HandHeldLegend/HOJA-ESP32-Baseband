@@ -657,6 +657,7 @@ int core_bt_sinput_start(void)
     esp_err_t ret;
     int err;
 
+    uint8_t tmpmac[6] = {0};
     uint8_t *mac = global_live_data.current_mac;
 
     if( (mac[0] == 0) && (mac[1] == 0) )
@@ -664,7 +665,10 @@ int core_bt_sinput_start(void)
         mac = global_loaded_settings.device_mac_switch;
     }
 
-    err = util_bluetooth_init(mac);
+    memcpy(tmpmac, mac, 6);
+    // On ESP32, the Bluetooth address is the base MAC with the last octet +=2
+    tmpmac[5] -= 2;
+    err = util_bluetooth_init(tmpmac);
 
     _sinput_paired = false;
 

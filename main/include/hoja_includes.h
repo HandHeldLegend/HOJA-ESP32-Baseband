@@ -146,6 +146,7 @@ typedef struct
 
 #include "core_bt_switch.h"
 #include "core_bt_sinput.h"
+#include "core_bt_xinput.h"
 #include "util_bt_hid.h"
 
 #endif 

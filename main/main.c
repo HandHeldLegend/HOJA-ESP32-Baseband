@@ -419,6 +419,9 @@ void settings_default()
 
     memset(&global_loaded_settings.paired_host_sinput_mac, 0, 6);
     generate_random_mac(global_loaded_settings.device_mac_sinput);
+
+    memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
+    generate_random_mac(global_loaded_settings.device_mac_xinput);
 }
 
 void app_settings_save()
@@ -458,6 +461,10 @@ void app_save_host_mac(input_mode_t mode, uint8_t *address)
 
         case INPUT_MODE_SINPUT:
             write_address = global_loaded_settings.paired_host_sinput_mac;
+        break;
+
+        case INPUT_MODE_XINPUT:
+            write_address = global_loaded_settings.paired_host_xinput_mac;
         break;
     }
 
@@ -717,6 +724,11 @@ void bt_device_start(uint8_t *data)
                 generate_random_mac(global_loaded_settings.device_mac_switch);
             break;
 
+            case INPUT_MODE_XINPUT:
+                memset(&global_loaded_settings.paired_host_xinput_mac, 0, 6);
+                generate_random_mac(global_loaded_settings.device_mac_xinput);
+            break;
+
             case INPUT_MODE_SINPUT:
                 memset(&global_loaded_settings.paired_host_sinput_mac, 0, 6);
                 generate_random_mac(global_loaded_settings.device_mac_sinput);
@@ -736,6 +748,12 @@ void bt_device_start(uint8_t *data)
         ESP_LOGI(TAG, "Switch BT Mode Init...");
 
         core_bt_switch_start();
+        break;
+
+    case INPUT_MODE_XINPUT:
+        _bluetooth_input_cb = xinput_bt_sendinput;
+        ESP_LOGI(TAG, "XInput BT Mode Init...");
+        core_bt_xinput_start();
         break;
 
     case INPUT_MODE_SINPUT:

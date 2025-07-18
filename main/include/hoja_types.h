@@ -96,7 +96,7 @@ typedef struct
     // Mac address of this device
     uint8_t device_mac_switch[6];
 
-    uint8_t device_mac_depreciated[6];
+    uint8_t device_mac_xinput[6];
 
     uint8_t device_mac_sinput[6];
 
@@ -104,7 +104,7 @@ typedef struct
     uint8_t paired_host_switch_mac[6];
 
     // DEPRECIATED
-    uint8_t paired_host_depreciated_mac[6];
+    uint8_t paired_host_xinput_mac[6];
 
     // Mac address of the SInput we are paired to
     uint8_t paired_host_sinput_mac[6];

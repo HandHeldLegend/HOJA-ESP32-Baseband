@@ -3,19 +3,7 @@
 
 #include "hoja_includes.h"
 
-// XInput Hat Codes
-typedef enum
-{
-  XI_HAT_TOP          = 0x01,
-  XI_HAT_TOP_RIGHT    = 0x02,
-  XI_HAT_RIGHT        = 0x03,
-  XI_HAT_BOTTOM_RIGHT = 0x04,
-  XI_HAT_BOTTOM       = 0x05,
-  XI_HAT_BOTTOM_LEFT  = 0x06,
-  XI_HAT_LEFT         = 0x07,
-  XI_HAT_TOP_LEFT     = 0x08,
-  XI_HAT_CENTER       = 0x00,
-} xi_input_hat_dir_t;
+
 
 typedef enum
 {

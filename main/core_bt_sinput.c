@@ -432,7 +432,10 @@ void sinput_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         }
 
         app_set_connected_status(0);
+
+        app_set_power_setting(POWER_CODE_OFF); // Shut down
         
+        /*
         if(_sinput_paired)
         {
             ESP_LOGI(TAG, "Setting to non-connectable, non-discoverable, then attempting connection.");
@@ -443,7 +446,7 @@ void sinput_bt_gap_cb(esp_bt_gap_cb_event_t event, esp_bt_gap_cb_param_t *param)
         {
             ESP_LOGI(TAG, "Setting to connectable, discoverable.");
             esp_bt_gap_set_scan_mode(ESP_BT_CONNECTABLE, ESP_BT_GENERAL_DISCOVERABLE);
-        }
+        }*/
 
         break;
     

@@ -293,10 +293,10 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
     {
         switch(sub_id)
         {
-            case 0x01: // Super Gamepad+
+            case 0x00: // Super Gamepad+
 
                 data[4] = 0; // Default type
-                data[5] = 0x01 | (3 << 4); // Gamepad Sub-Type and face style
+                data[5] = (3 << 5); // Gamepad Sub-Type and face style
 
                 feature_flags.player_leds_supported = 1;
 

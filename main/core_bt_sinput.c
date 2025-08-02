@@ -313,6 +313,9 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
         switch(pid)
         {
             case 0x10DD: // GC Ultimate
+
+                data[5] = (2 << 5); // Gamepad Sub-Type and face style
+
                 feature_flags.accelerometer_supported   = 1;
                 feature_flags.gyroscope_supported       = 1;
                 feature_flags.left_analog_stick_supported       = 1;
@@ -332,6 +335,9 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
             break;
 
             case 0x10DF: // ProGCC
+
+                data[5] = (3 << 5); // Gamepad Sub-Type and face style
+
                 feature_flags.accelerometer_supported   = 1;
                 feature_flags.gyroscope_supported       = 1;
                 feature_flags.left_analog_stick_supported       = 1;

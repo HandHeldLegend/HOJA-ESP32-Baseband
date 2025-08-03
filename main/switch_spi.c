@@ -441,13 +441,33 @@ uint8_t sw_spi_getaddressdata(uint8_t offset_address, uint8_t address)
             {
                 // STAGE 5
                 // Stick user calibration
-                // Magic bytes
-
-                case 0x10 ... 0x1A:
-                    return 0xFF; // No left stick config
+                
+                // Left magic bytes
+                case 0x10:
+                    return 0xB2; // Magic byte
                     break;
-                case 0x1B ... 0x25:
-                    return 0xFF; // No user config... maybe this helps :,)
+
+                case 0x11:
+                    return 0xA1; // Magic byte
+                    break;
+
+                // Left User Stick (9 Bytes)
+                case 0x12 ... 0x1A:
+                    return switch_analog_calibration_data[address-0x12];
+                    break;
+
+                // Right magic bytes
+                case 0x1B:
+                    return 0xB2; // Magic byte
+                    break;
+
+                case 0x1C:
+                    return 0xA1; // Magic byte
+                    break;
+
+                // Right User Stick (9 Bytes)
+                case 0x1D ... 0x25:
+                    return switch_analog_calibration_data[address-0x1D + 9];
                     break;
 
                 // Gyro Calibration

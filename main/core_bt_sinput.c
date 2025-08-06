@@ -19,10 +19,10 @@ typedef struct
 
     union {
         struct {
-            uint8_t button_a   : 1;
-            uint8_t button_b   : 1;
-            uint8_t button_x   : 1;
-            uint8_t button_y   : 1;
+            uint8_t button_south : 1;
+            uint8_t button_east  : 1;
+            uint8_t button_west  : 1;
+            uint8_t button_north : 1;
             uint8_t dpad_up    : 1;
             uint8_t dpad_down  : 1;
             uint8_t dpad_left  : 1;
@@ -281,6 +281,8 @@ static volatile bool        _sinput_paired = false;
 interval_s _si_interval = {0};
 sinput_input_s _si_input = {0};
 
+uint8_t _si_face_style = 0;
+
 void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
 {
     const uint16_t sinput_protocol_version = 0x0001;
@@ -315,6 +317,7 @@ void _si_fill_features(uint16_t pid, uint8_t sub_id, uint8_t *data)
             case 0x10DD: // GC Ultimate
 
                 data[5] = (2 << 5); // Gamepad Sub-Type and face style
+                _si_face_style = 2; // Set face style to 2 (GameCube Ultimate)
 
                 feature_flags.accelerometer_supported   = 1;
                 feature_flags.gyroscope_supported       = 1;
@@ -822,10 +825,21 @@ void sinput_bt_sendinput(i2cinput_input_s *input)
     _si_input.right_y   = SCALE_AXIS(input->ry, true);
 
     // Buttons
-    _si_input.button_a = input->button_a;
-    _si_input.button_b = input->button_b;
-    _si_input.button_x = input->button_x;
-    _si_input.button_y = input->button_y;
+    if(!_si_face_style)
+    { 
+        _si_input.button_east  = input->button_a;
+        _si_input.button_south = input->button_b;
+        _si_input.button_west  = input->button_y;
+        _si_input.button_north = input->button_x;
+    }
+    else if (_si_face_style == 2)
+    {
+        _si_input.button_east  = input->button_x;
+        _si_input.button_south = input->button_a;
+        _si_input.button_west  = input->button_b;
+        _si_input.button_north = input->button_y;
+    }
+    
 
     _si_input.button_stick_left  = input->button_stick_left;
     _si_input.button_stick_right = input->button_stick_right;

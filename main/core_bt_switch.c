@@ -685,10 +685,10 @@ void switch_bt_sendinput(i2cinput_input_s *input)
     _switch_input_data.rs_x = input->rx;
     _switch_input_data.rs_y = input->ry;
 
-    _switch_input_data.b_a = input->button_a;
-    _switch_input_data.b_b = input->button_b;
-    _switch_input_data.b_x = input->button_x;
-    _switch_input_data.b_y = input->button_y;
+    _switch_input_data.b_a = input->button_east;
+    _switch_input_data.b_b = input->button_south;
+    _switch_input_data.b_x = input->button_north;
+    _switch_input_data.b_y = input->button_west;
 
     _switch_input_data.d_down   = input->dpad_down;
     _switch_input_data.d_left   = input->dpad_left;

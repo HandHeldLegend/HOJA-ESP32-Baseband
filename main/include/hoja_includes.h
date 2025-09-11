@@ -1,7 +1,7 @@
 #ifndef HOJA_INCLUDES_H
 #define HOJA_INCLUDES_H
 
-#define HOJA_BASEBAND_VERSION 0xA030
+#define HOJA_BASEBAND_VERSION 0xA031
 #define HOJA_MAGIC_NUM 0x83FD
 #define HOJA_SETTINGS_NAMESPACE "hsettings"
 
@@ -79,10 +79,10 @@ typedef struct
             uint8_t dpad_left   : 1;
             uint8_t dpad_right  : 1;
             // Buttons
-            uint8_t button_a    : 1;
-            uint8_t button_b    : 1;
-            uint8_t button_x    : 1;
-            uint8_t button_y    : 1;
+            uint8_t button_south : 1;
+            uint8_t button_east  : 1;
+            uint8_t button_west  : 1;
+            uint8_t button_north : 1;
 
             // Triggers
             uint8_t trigger_l   : 1;

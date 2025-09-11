@@ -825,22 +825,11 @@ void sinput_bt_sendinput(i2cinput_input_s *input)
     _si_input.right_y   = SCALE_AXIS(input->ry, true);
 
     // Buttons
-    if(!_si_face_style)
-    { 
-        _si_input.button_east  = input->button_a;
-        _si_input.button_south = input->button_b;
-        _si_input.button_west  = input->button_y;
-        _si_input.button_north = input->button_x;
-    }
-    else if (_si_face_style == 2)
-    {
-        _si_input.button_east  = input->button_x;
-        _si_input.button_south = input->button_a;
-        _si_input.button_west  = input->button_b;
-        _si_input.button_north = input->button_y;
-    }
+    _si_input.button_east  = input->button_east;
+    _si_input.button_south = input->button_south;
+    _si_input.button_west  = input->button_west;
+    _si_input.button_north = input->button_north;
     
-
     _si_input.button_stick_left  = input->button_stick_left;
     _si_input.button_stick_right = input->button_stick_right;
 

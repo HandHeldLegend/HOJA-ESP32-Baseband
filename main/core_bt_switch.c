@@ -218,26 +218,26 @@ void ns_report_setinputreport_full(uint8_t *buffer)
   {
     // Set gyro
     // Retrieve and write IMU data
-    imu_data_s *_imu_tmp = imu_fifo_last();
+    static imu_data_s imu = {0};
+    imu_access_safe(&imu);
 
     // Group 1
-    buffer[12] = _imu_tmp->ay_8l; // Y-axis
-    buffer[13] = _imu_tmp->ay_8h;
-    buffer[14] = _imu_tmp->ax_8l; // X-axis
-    buffer[15] = _imu_tmp->ax_8h;
-    buffer[16] = _imu_tmp->az_8l; // Z-axis
-    buffer[17] = _imu_tmp->az_8h;
-
-    buffer[18] = _imu_tmp->gy_8l;
-    buffer[19] = _imu_tmp->gy_8h;
-    buffer[20] = _imu_tmp->gx_8l;
-    buffer[21] = _imu_tmp->gx_8h;
-    buffer[22] = _imu_tmp->gz_8l;
-    buffer[23] = _imu_tmp->gz_8h;
-
-    _imu_tmp = imu_fifo_last();
+    buffer[12] = imu.ay_8l; // Y-axis
+    buffer[13] = imu.ay_8h;
+    buffer[14] = imu.ax_8l; // X-axis
+    buffer[15] = imu.ax_8h;
+    buffer[16] = imu.az_8l; // Z-axis
+    buffer[17] = imu.az_8h;
+    buffer[18] = imu.gy_8l;
+    buffer[19] = imu.gy_8h;
+    buffer[20] = imu.gx_8l;
+    buffer[21] = imu.gx_8h;
+    buffer[22] = imu.gz_8l;
+    buffer[23] = imu.gz_8h;
 
     // Group 2
+    memcpy(&buffer[24], &buffer[12], 12);
+    /*
     buffer[24] = _imu_tmp->ay_8l; // Y-axis
     buffer[25] = _imu_tmp->ay_8h;
     buffer[26] = _imu_tmp->ax_8l; // X-axis
@@ -251,10 +251,11 @@ void ns_report_setinputreport_full(uint8_t *buffer)
     buffer[33] = _imu_tmp->gx_8h;
     buffer[34] = _imu_tmp->gz_8l;
     buffer[35] = _imu_tmp->gz_8h;
-
-    _imu_tmp = imu_fifo_last();
+    */
 
     // Group 3
+    memcpy(&buffer[36], &buffer[12], 12);
+    /*
     buffer[36] = _imu_tmp->ay_8l; // Y-axis
     buffer[37] = _imu_tmp->ay_8h;
     buffer[38] = _imu_tmp->ax_8l; // X-axis
@@ -268,6 +269,7 @@ void ns_report_setinputreport_full(uint8_t *buffer)
     buffer[45] = _imu_tmp->gx_8h;
     buffer[46] = _imu_tmp->gz_8l;
     buffer[47] = _imu_tmp->gz_8h;
+    */
   }
   else if (_switch_imu_mode == 0x02)
   {
@@ -685,10 +687,10 @@ void switch_bt_sendinput(i2cinput_input_s *input)
     _switch_input_data.rs_x = input->rx;
     _switch_input_data.rs_y = input->ry;
 
-    _switch_input_data.b_a = input->button_a;
-    _switch_input_data.b_b = input->button_b;
-    _switch_input_data.b_x = input->button_x;
-    _switch_input_data.b_y = input->button_y;
+    _switch_input_data.b_a = input->button_east;
+    _switch_input_data.b_b = input->button_south;
+    _switch_input_data.b_x = input->button_north;
+    _switch_input_data.b_y = input->button_west;
 
     _switch_input_data.d_down   = input->dpad_down;
     _switch_input_data.d_left   = input->dpad_left;

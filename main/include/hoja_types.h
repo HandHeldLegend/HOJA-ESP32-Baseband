@@ -73,6 +73,7 @@ typedef struct
         int16_t gz;
     };
     
+    uint64_t timestamp;
     bool retrieved;
 } imu_data_s;
 
@@ -181,7 +182,7 @@ typedef struct
             float w;
         };
     };
-    uint32_t timestamp;
+    uint64_t timestamp;
     int16_t ax;
     int16_t ay;
     int16_t az;

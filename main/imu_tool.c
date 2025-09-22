@@ -1,21 +1,37 @@
 #include "imu_tool.h"
 #include "math.h"
+#include "crosscore_snapshot.h"
 
 #define IMU_FIFO_COUNT 3
 #define IMU_FIFO_IDX_MAX (IMU_FIFO_COUNT-1)
 int _imu_fifo_idx = 0;
 imu_data_s _imu_fifo[IMU_FIFO_COUNT];
 
+SNAPSHOT_TYPE(imu, imu_data_s);
+snapshot_imu_t _imu_snap;
+
+SNAPSHOT_TYPE(quat, quaternion_s);
+snapshot_quat_t _quat_snap;
+
 quaternion_s _imu_quat_state = {.w = 1};
+
 #define GYRO_SENS (2000.0f / 32768.0f)
 
-imu_data_s* imu_fifo_last()
+void imu_access_safe(imu_data_s *out)
 {
-  return &(_imu_fifo[_imu_fifo_idx]);
+  snapshot_imu_read(&_imu_snap, out);
+}
+
+void imu_quat_access_safe(quaternion_s *out)
+{
+  snapshot_quat_read(&_quat_snap, out);
 }
 
 void imu_pack_quat(mode_2_s *out)
 {
+
+  imu_quat_access_safe(&_imu_quat_state);
+
   out->mode = 2;
 
   static uint64_t time_ms;
@@ -56,9 +72,10 @@ void imu_pack_quat(mode_2_s *out)
   out->delta_mid_avg_2 = 0;
 
   // Timestamps handling is still a bit unclear, these are the values that motion_data in no drifting 
-  _imu_quat_state.timestamp = get_timestamp_ms();
-  out->timestamp_start_l = _imu_quat_state.timestamp & 0x1;
-  out->timestamp_start_h = (_imu_quat_state.timestamp  >> 1) & 0x3FF;
+  uint64_t timestamp = _imu_quat_state.timestamp/1000; // us to ms
+
+  out->timestamp_start_l = timestamp & 0x1;
+  out->timestamp_start_h = (timestamp  >> 1) & 0x3FF;
   out->timestamp_count = 3;
 
   out->accel_0.x = _imu_quat_state.ax;
@@ -126,22 +143,14 @@ void _imu_update_quaternion(imu_data_s *imu_data, uint64_t timestamp) {
     _imu_quat_state.ax = imu_data->ax;
     _imu_quat_state.ay = imu_data->ay;
     _imu_quat_state.az = imu_data->az;
+    _imu_quat_state.timestamp = imu_data->timestamp;
+    snapshot_quat_write(&_quat_snap, &_imu_quat_state);
 }
 
 // Add data to our FIFO
 void imu_fifo_push(imu_data_s *imu_data)
 {
-    int _i = (_imu_fifo_idx+1) % IMU_FIFO_COUNT;
-
-    _imu_fifo[_i].ax = imu_data->ax;
-    _imu_fifo[_i].ay = imu_data->ay;
-    _imu_fifo[_i].az = imu_data->az;
-
-    _imu_fifo[_i].gx = imu_data->gx;
-    _imu_fifo[_i].gy = imu_data->gy;
-    _imu_fifo[_i].gz = imu_data->gz;
-
-    _imu_fifo_idx = _i;
-
-    _imu_update_quaternion(imu_data, get_timestamp_us());
+    imu_data->timestamp = get_timestamp_us();
+    snapshot_imu_write(&_imu_snap, imu_data);
+    _imu_update_quaternion(imu_data, imu_data->timestamp);
 }

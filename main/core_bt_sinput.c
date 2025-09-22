@@ -769,23 +769,19 @@ void _sinput_bt_task(void *parameters)
                         }
 
                         _si_input.charge_percent = global_live_data.bat_status.bat_lvl * 25;
-
-                        // Fill out delta time and gyro
-                        uint64_t timestamp = get_timestamp_us();
-
-                        _si_input.imu_timestamp_us = (uint32_t) (timestamp & UINT32_MAX);
                         
-                        static imu_data_s *imu = NULL;
+                        static imu_data_s imu = {0};
 
-                        imu = imu_fifo_last();
+                        imu_access_safe(&imu);
 
-                        _si_input.accel_x = imu->ax;
-                        _si_input.accel_y = imu->ay;
-                        _si_input.accel_z = imu->az;
+                        _si_input.imu_timestamp_us = (uint32_t) (imu.timestamp & UINT32_MAX);
+                        _si_input.accel_x = imu.ax;
+                        _si_input.accel_y = imu.ay;
+                        _si_input.accel_z = imu.az;
 
-                        _si_input.gyro_x = imu->gx;
-                        _si_input.gyro_y = imu->gy;
-                        _si_input.gyro_z = imu->gz;
+                        _si_input.gyro_x = imu.gx;
+                        _si_input.gyro_y = imu.gy;
+                        _si_input.gyro_z = imu.gz;
 
                         // Fill out input data here
                         memcpy(_full_buffer, &_si_input, sizeof(sinput_input_s));
